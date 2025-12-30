@@ -1,11 +1,15 @@
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTrip, useTripCollaborators } from '@/hooks/use-trips';
 import { CollaboratorRole, TripCollaborator } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     SafeAreaView,
     ScrollView,
@@ -32,10 +36,51 @@ export default function CollaboratorsScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [collaborators] = useState<CollaboratorWithProfile[]>([]);
+  const { user: currentUser } = useAuth();
+  const { trip, loading: tripLoading } = useTrip(id);
+  const { collaborators: rawCollaborators, loading: collabLoading, error } = useTripCollaborators(id);
+
   const [inviteEmail, setInviteEmail] = useState('');
   const [showInvite, setShowInvite] = useState(false);
   const [selectedRole, setSelectedRole] = useState<CollaboratorRole>('editor');
+
+  const loading = tripLoading || collabLoading;
+
+  // Build collaborators list with the owner first
+  const collaborators: CollaboratorWithProfile[] = React.useMemo(() => {
+    const members: CollaboratorWithProfile[] = [];
+
+    // Add the trip creator as owner
+    if (trip?.creator) {
+      members.push({
+        id: 'owner-' + trip.creatorId,
+        tripId: id || '',
+        userId: trip.creatorId,
+        role: 'owner',
+        name: trip.creator.name,
+        email: trip.creator.email,
+      });
+    }
+
+    // Add other collaborators
+    rawCollaborators.forEach((collab) => {
+      // Skip if this is the owner (already added)
+      if (collab.userId === trip?.creatorId) return;
+      
+      members.push({
+        id: collab.id,
+        tripId: collab.tripId,
+        userId: collab.userId,
+        role: collab.role,
+        name: collab.user?.name || 'Unknown',
+        email: collab.user?.email || '',
+      });
+    });
+
+    return members;
+  }, [trip, rawCollaborators, id]);
+
+  const isCurrentUserOwner = currentUser?.id === trip?.creatorId;
 
   const inviteCode = 'TRIP-ABC123';
 
@@ -92,12 +137,7 @@ export default function CollaboratorsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Trip Members</Text>
         <TouchableOpacity
           onPress={() => setShowInvite(true)}
@@ -112,6 +152,18 @@ export default function CollaboratorsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : error ? (
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Unable to load members"
+            description={error.message || "There was an error loading trip members."}
+          />
+        ) : (
+          <>
         {/* Quick Share */}
         <View style={[styles.shareCard, { backgroundColor: Colors.primary + '10', borderColor: Colors.primary + '30' }]}>
           <View style={styles.shareHeader}>
@@ -223,7 +275,7 @@ export default function CollaboratorsScreen() {
                 <View style={styles.collaboratorInfo}>
                   <Text style={[styles.collaboratorName, { color: colors.text }]}>
                     {collaborator.name}
-                    {collaborator.role === 'owner' && ' (You)'}
+                    {collaborator.userId === currentUser?.id && ' (You)'}
                   </Text>
                   <Text style={[styles.collaboratorEmail, { color: colors.textSecondary }]}>
                     {collaborator.email}
@@ -267,6 +319,8 @@ export default function CollaboratorsScreen() {
             </Text>
           </View>
         </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -275,6 +329,14 @@ export default function CollaboratorsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Spacing.xxl,
   },
   header: {
     flexDirection: 'row',
@@ -283,12 +345,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,

@@ -1,11 +1,13 @@
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTripDocuments } from '@/hooks/use-trips';
 import { DocumentType, TripDocument } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Dimensions,
     Image,
@@ -39,9 +41,15 @@ export default function DocumentsScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-const [documents] = useState<DocumentWithName[]>([]);
+  const { documents: rawDocuments, loading, error } = useTripDocuments(id);
   const [filter, setFilter] = useState<DocumentType | 'all'>('all');
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
+
+  // Map documents to include name from fileName or default
+  const documents: DocumentWithName[] = rawDocuments.map((doc) => ({
+    ...doc,
+    name: doc.label || 'Untitled Document',
+  }));
 
   const filteredDocuments = filter === 'all'
     ? documents
@@ -93,12 +101,7 @@ const [documents] = useState<DocumentWithName[]>([]);
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Documents</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -165,7 +168,17 @@ const [documents] = useState<DocumentWithName[]>([]);
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {filteredDocuments.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : error ? (
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Unable to load documents"
+            description={error.message || "There was an error loading documents."}
+          />
+        ) : filteredDocuments.length === 0 ? (
           <EmptyState
             icon="folder-open-outline"
             title="No documents yet"
@@ -291,6 +304,14 @@ const [documents] = useState<DocumentWithName[]>([]);
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Spacing.xxl,
   },
   header: {
     flexDirection: 'row',
@@ -299,12 +320,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,

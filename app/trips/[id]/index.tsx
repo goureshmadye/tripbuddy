@@ -1,10 +1,12 @@
+import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { ItineraryItem, Trip } from '@/types/database';
+import { useTrip, useTripCollaborators, useTripExpenses, useTripItinerary } from '@/hooks/use-trips';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React from 'react';
 import {
+    ActivityIndicator,
     Dimensions,
     SafeAreaView,
     ScrollView,
@@ -40,8 +42,11 @@ export default function TripOverviewScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [itinerary, setItinerary] = useState<ItineraryItem[]>([]);
+  // Fetch trip data from Firestore
+  const { trip, loading: tripLoading, error: tripError } = useTrip(id);
+  const { items: itinerary, loading: itineraryLoading } = useTripItinerary(id);
+  const { collaborators, loading: collabLoading } = useTripCollaborators(id);
+  const { expenses, totalExpenses, loading: expensesLoading } = useTripExpenses(id);
 
   const formatDateRange = (start: Date, end: Date): string => {
     const startDate = new Date(start);
@@ -61,13 +66,51 @@ export default function TripOverviewScreen() {
     router.push(`/trips/${id}/${action.route}`);
   };
 
-  if (!trip) {
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  };
+
+  // Loading state
+  if (tripLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>Loading...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading trip...
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
+
+  // Error state
+  if (tripError || !trip) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <View style={styles.headerPlaceholder} />
+        </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Trip not found"
+          description={tripError?.message || "We couldn't find this trip. It may have been deleted."}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // Get today's items
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  
+  const todaysItems = itinerary.filter(item => {
+    if (!item.startTime) return false;
+    const itemDate = new Date(item.startTime);
+    return itemDate >= todayStart && itemDate < todayEnd;
+  });
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -78,12 +121,7 @@ export default function TripOverviewScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
           <TouchableOpacity
             style={[styles.menuButton, { backgroundColor: colors.backgroundSecondary }]}
           >
@@ -144,34 +182,50 @@ export default function TripOverviewScreen() {
               <Text style={[styles.seeAllText, { color: Colors.primary }]}>See All</Text>
             </TouchableOpacity>
           </View>
-          {itinerary.slice(0, 3).map((item, index) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.scheduleItem,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-              onPress={() => router.push(`/trips/${id}/itinerary/${item.id}`)}
-            >
-              <View style={[styles.scheduleTime, { backgroundColor: Colors.primary + '10' }]}>
-                <Text style={[styles.timeText, { color: Colors.primary }]}>
-                  {item.startTime?.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          {itineraryLoading ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : todaysItems.length === 0 ? (
+            <View style={[styles.emptySchedule, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Ionicons name="calendar-outline" size={32} color={colors.textMuted} />
+              <Text style={[styles.emptyScheduleText, { color: colors.textSecondary }]}>
+                No activities scheduled for today
+              </Text>
+              <TouchableOpacity onPress={() => router.push(`/trips/${id}/itinerary/add`)}>
+                <Text style={[styles.addActivityText, { color: Colors.primary }]}>
+                  Add an activity
                 </Text>
-              </View>
-              <View style={styles.scheduleContent}>
-                <Text style={[styles.scheduleTitle, { color: colors.text }]}>{item.title}</Text>
-                {item.location && (
-                  <View style={styles.locationRow}>
-                    <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                    <Text style={[styles.locationText, { color: colors.textSecondary }]}>
-                      {item.location}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            todaysItems.slice(0, 3).map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.scheduleItem,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+                onPress={() => router.push(`/trips/${id}/itinerary/${item.id}`)}
+              >
+                <View style={[styles.scheduleTime, { backgroundColor: Colors.primary + '10' }]}>
+                  <Text style={[styles.timeText, { color: Colors.primary }]}>
+                    {item.startTime?.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                <View style={styles.scheduleContent}>
+                  <Text style={[styles.scheduleTitle, { color: colors.text }]}>{item.title}</Text>
+                  {item.location && (
+                    <View style={styles.locationRow}>
+                      <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                      <Text style={[styles.locationText, { color: colors.textSecondary }]}>
+                        {item.location}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Trip Stats */}
@@ -185,18 +239,22 @@ export default function TripOverviewScreen() {
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.card }]}>
               <Ionicons name="people-outline" size={24} color={Colors.secondary} />
-              <Text style={[styles.statNumber, { color: colors.text }]}>4</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>
+                {collabLoading ? '...' : collaborators.length + 1}
+              </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Travelers</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.card }]}>
               <Ionicons name="receipt-outline" size={24} color={Colors.accent} />
-              <Text style={[styles.statNumber, { color: colors.text }]}>$1,250</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>
+                {expensesLoading ? '...' : formatCurrency(totalExpenses)}
+              </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Expenses</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.card }]}>
               <Ionicons name="document-outline" size={24} color={Colors.info} />
-              <Text style={[styles.statNumber, { color: colors.text }]}>6</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Documents</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>{expenses.length}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Records</Text>
             </View>
           </View>
         </View>
@@ -208,6 +266,8 @@ export default function TripOverviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   scrollView: {
     flex: 1,
@@ -222,12 +282,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   menuButton: {
     width: 40,
@@ -379,5 +436,29 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: FontSizes.xs,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  loadingText: {
+    fontSize: FontSizes.md,
+  },
+  emptySchedule: {
+    alignItems: 'center',
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    gap: Spacing.sm,
+  },
+  emptyScheduleText: {
+    fontSize: FontSizes.sm,
+    textAlign: 'center',
+  },
+  addActivityText: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.semibold,
   },
 });

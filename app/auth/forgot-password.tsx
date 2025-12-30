@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { validateEmail } from '@/utils/validation';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -21,6 +23,7 @@ export default function ForgotPasswordScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { resetPassword } = useAuth();
 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,20 +35,21 @@ export default function ForgotPasswordScreen() {
       setError('Email is required');
       return;
     }
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      setError('Please enter a valid email');
+    
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+      setError(emailValidation.error || 'Please enter a valid email');
       return;
     }
     
     setError('');
     setLoading(true);
     try {
-      // TODO: Implement Firebase password reset
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await resetPassword(email);
       setSent(true);
     } catch (error) {
       console.error('Reset password error:', error);
-      setError('Failed to send reset email. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to send reset email. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -96,12 +100,7 @@ export default function ForgotPasswordScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <View style={styles.headerPlaceholder} />
           </View>
 
           {/* Icon */}
@@ -164,6 +163,8 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -177,12 +178,9 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     marginBottom: Spacing.lg,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   iconContainer: {
     alignItems: 'center',

@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { addCollaborator, createTrip, getUserByEmail } from '@/services/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
@@ -48,6 +50,8 @@ export default function CreateTripScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+
+  const { user } = useAuth();
 
   // Wizard state
   const [step, setStep] = useState(1);
@@ -144,16 +148,51 @@ export default function CreateTripScreen() {
   };
 
   const handleCreate = async () => {
+    if (!user) {
+      Alert.alert('Error', 'You must be signed in to create a trip');
+      return;
+    }
+
     setLoading(true);
     try {
-      // TODO: Create trip in Firestore
-      // TODO: Send invites to collaborators
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Create trip in Firestore
+      const tripId = await createTrip({
+        title: title.trim(),
+        startDate,
+        endDate,
+        creatorId: user.id,
+        transportationMode: transportMode || null,
+        tripType: tripType || null,
+      });
+
+      // Add creator as owner collaborator
+      await addCollaborator({
+        tripId,
+        userId: user.id,
+        role: 'owner',
+      });
+
+      // Invite collaborators by email
+      for (const email of invitedEmails) {
+        try {
+          const invitedUser = await getUserByEmail(email);
+          if (invitedUser) {
+            await addCollaborator({
+              tripId,
+              userId: invitedUser.id,
+              role: 'editor',
+            });
+          }
+          // If user not found, we could store pending invites in a separate collection
+        } catch (err) {
+          console.warn(`Failed to add collaborator ${email}:`, err);
+        }
+      }
       
       Alert.alert(
         'Trip Created! 🎉',
         `"${title}" has been created successfully.${invitedEmails.length > 0 ? ` Invites sent to ${invitedEmails.length} people.` : ''}`,
-        [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+        [{ text: 'View Trip', onPress: () => router.replace(`/trips/${tripId}`) }]
       );
     } catch (error) {
       console.error('Create trip error:', error);
@@ -457,12 +496,7 @@ export default function CreateTripScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={handleBack}
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name={step === 1 ? "close" : "arrow-back"} size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             New Trip
           </Text>
@@ -537,6 +571,8 @@ export default function CreateTripScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -547,13 +583,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,

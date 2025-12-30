@@ -1,9 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTrips } from '@/hooks/use-trips';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -15,18 +17,6 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  photoUrl: string | null;
-  currency: string;
-  country: string;
-  memberSince: string;
-  tripsCount: number;
-  countriesVisited: number;
-}
 
 interface StatItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -49,19 +39,18 @@ export default function ProfileScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, signOutUser, isGuestMode, disableGuestMode } = useAuth();
+  const { trips } = useTrips();
 
-  // Simulate loading state - in real app, fetch user data here
-  React.useEffect(() => {
-    // TODO: Fetch user data from Firebase
-    setLoading(false);
-  }, []);
+  // Calculate stats from real data
+  const memberSince = user?.createdAt 
+    ? new Date(user.createdAt).getFullYear().toString()
+    : new Date().getFullYear().toString();
 
   const stats: StatItem[] = user ? [
-    { icon: 'airplane', value: user.tripsCount, label: 'Trips', color: Colors.primary },
-    { icon: 'globe', value: user.countriesVisited, label: 'Countries', color: Colors.secondary },
-    { icon: 'calendar', value: user.memberSince, label: 'Member Since', color: Colors.accent },
+    { icon: 'airplane', value: trips.length, label: 'Trips', color: Colors.primary },
+    { icon: 'globe', value: trips.filter(t => new Date(t.endDate) < new Date()).length, label: 'Completed', color: Colors.secondary },
+    { icon: 'calendar', value: memberSince, label: 'Member Since', color: Colors.accent },
   ] : [];
 
   const quickActions: QuickAction[] = [
@@ -101,7 +90,19 @@ export default function ProfileScreen() {
       'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => router.replace('/auth') },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await signOutUser();
+              await disableGuestMode();
+              router.replace('/auth');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          }
+        },
       ]
     );
   };
@@ -116,22 +117,43 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!user) {
+  // Guest mode UI
+  if (isGuestMode || !user) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.emptyContainer}>
           <View style={[styles.emptyIcon, { backgroundColor: Colors.primary + '10' }]}>
             <Ionicons name="person-outline" size={48} color={Colors.primary} />
           </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Not Signed In</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            {isGuestMode ? 'Guest Mode' : 'Not Signed In'}
+          </Text>
           <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
-            Sign in to view your profile and trip history.
+            {isGuestMode 
+              ? 'You\'re using TripBuddy as a guest. Sign in to sync your trips across devices and unlock all features.'
+              : 'Sign in to view your profile and trip history.'}
           </Text>
           <Button
             title="Sign In"
-            onPress={() => router.replace('/auth')}
+            onPress={async () => {
+              if (isGuestMode) {
+                await disableGuestMode();
+              }
+              router.replace('/auth');
+            }}
             style={{ marginTop: Spacing.lg }}
           />
+          {isGuestMode && (
+            <Button
+              title="Create Account"
+              variant="outline"
+              onPress={async () => {
+                await disableGuestMode();
+                router.replace('/auth/signup');
+              }}
+              style={{ marginTop: Spacing.sm }}
+            />
+          )}
         </View>
       </SafeAreaView>
     );
@@ -147,8 +169,8 @@ export default function ProfileScreen() {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={[styles.avatarContainer, Shadows.md]}>
-            {user.photoUrl ? (
-              <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
+            {user.profilePhoto ? (
+              <Image source={{ uri: user.profilePhoto }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatarPlaceholder, { backgroundColor: Colors.primary + '20' }]}>
                 <Text style={[styles.avatarText, { color: Colors.primary }]}>
@@ -169,7 +191,9 @@ export default function ProfileScreen() {
 
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.locationText, { color: colors.textMuted }]}>{user.country}</Text>
+            <Text style={[styles.locationText, { color: colors.textMuted }]}>
+              {user.defaultCurrency || 'USD'}
+            </Text>
           </View>
         </View>
 
@@ -211,37 +235,39 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Recent Activity */}
+        {/* Recent Trips */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Trips</Text>
           <View style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.activityItem}>
-              <View style={[styles.activityDot, { backgroundColor: Colors.primary }]} />
-              <View style={styles.activityContent}>
-                <Text style={[styles.activityText, { color: colors.text }]}>
-                  Created trip "Summer in Paris"
-                </Text>
-                <Text style={[styles.activityTime, { color: colors.textMuted }]}>2 days ago</Text>
+            {trips.length === 0 ? (
+              <View style={styles.activityItem}>
+                <View style={[styles.activityDot, { backgroundColor: colors.textMuted }]} />
+                <View style={styles.activityContent}>
+                  <Text style={[styles.activityText, { color: colors.textSecondary }]}>
+                    No trips yet. Create your first trip!
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={[styles.activityDot, { backgroundColor: Colors.secondary }]} />
-              <View style={styles.activityContent}>
-                <Text style={[styles.activityText, { color: colors.text }]}>
-                  Added 3 expenses to "Tokyo Adventure"
-                </Text>
-                <Text style={[styles.activityTime, { color: colors.textMuted }]}>5 days ago</Text>
-              </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={[styles.activityDot, { backgroundColor: Colors.accent }]} />
-              <View style={styles.activityContent}>
-                <Text style={[styles.activityText, { color: colors.text }]}>
-                  Invited 2 friends to collaborate
-                </Text>
-                <Text style={[styles.activityTime, { color: colors.textMuted }]}>1 week ago</Text>
-              </View>
-            </View>
+            ) : (
+              trips.slice(0, 3).map((trip, index) => (
+                <TouchableOpacity
+                  key={trip.id}
+                  style={styles.activityItem}
+                  onPress={() => router.push(`/trips/${trip.id}`)}
+                >
+                  <View style={[styles.activityDot, { backgroundColor: Colors.primary }]} />
+                  <View style={styles.activityContent}>
+                    <Text style={[styles.activityText, { color: colors.text }]}>
+                      {trip.title}
+                    </Text>
+                    <Text style={[styles.activityTime, { color: colors.textMuted }]}>
+                      {new Date(trip.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         </View>
 
@@ -263,6 +289,8 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   scrollView: {
     flex: 1,

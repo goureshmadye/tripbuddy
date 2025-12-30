@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -61,21 +62,27 @@ export default function WalkthroughScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { completeWalkthrough } = useAuth();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
+  const handleComplete = async () => {
+    await completeWalkthrough();
+    router.replace('/auth/onboarding');
+  };
+
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      router.replace('/auth/onboarding');
+      handleComplete();
     }
   };
 
   const handleSkip = () => {
-    router.replace('/auth/onboarding');
+    handleComplete();
   };
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
@@ -183,6 +190,8 @@ export default function WalkthroughScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   header: {
     flexDirection: 'row',

@@ -1,12 +1,26 @@
-import { Button } from '@/components/ui/button';
-import { Divider } from '@/components/ui/divider';
-import { Input } from '@/components/ui/input';
-import { SocialButton } from '@/components/ui/social-button';
-import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Divider } from "@/components/ui/divider";
+import { Input } from "@/components/ui/input";
+import { SocialButton } from "@/components/ui/social-button";
+import {
+    BorderRadius,
+    Colors,
+    FontSizes,
+    FontWeights,
+    Spacing,
+} from "@/constants/theme";
+import { useAuth } from "@/hooks/use-auth";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+    checkRateLimit,
+    recordFailedAttempt,
+    resetRateLimit,
+    validateEmail,
+    validateLoginForm,
+} from "@/utils/validation";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
     Alert,
     KeyboardAvoidingView,
@@ -17,89 +31,234 @@ import {
     Text,
     TouchableOpacity,
     View,
-} from 'react-native';
+} from "react-native";
 
 export default function LoginScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
+  const { signInWithEmail, signInWithGoogle, isOnboardingComplete, enableGuestMode } =
+    useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+    {}
+  );
+  const [touched, setTouched] = useState<{ email: boolean; password: boolean }>(
+    { email: false, password: false }
+  );
 
-  const validateForm = (): boolean => {
-    const newErrors: { email?: string; password?: string } = {};
-    
-    if (!email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = 'Please enter a valid email';
+  // Rate limiting state
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [remainingAttempts, setRemainingAttempts] = useState(5);
+
+  // Is form valid
+  const isFormValid =
+    email.length > 0 &&
+    password.length > 0 &&
+    Object.keys(errors).length === 0 &&
+    !isLocked;
+
+  // Check rate limit on mount
+  useEffect(() => {
+    checkRateLimitStatus();
+  }, []);
+
+  // Countdown timer for lockout
+  useEffect(() => {
+    if (lockoutSeconds > 0) {
+      const timer = setInterval(() => {
+        setLockoutSeconds((prev) => {
+          if (prev <= 1) {
+            setIsLocked(false);
+            checkRateLimitStatus();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
     }
-    
+  }, [lockoutSeconds]);
+
+  const checkRateLimitStatus = async () => {
+    const result = await checkRateLimit();
+    if (!result.allowed && result.lockoutSeconds) {
+      setIsLocked(true);
+      setLockoutSeconds(result.lockoutSeconds);
+    } else {
+      setIsLocked(false);
+      setRemainingAttempts(result.remainingAttempts);
+    }
+  };
+
+  // Real-time email validation
+  const validateEmailField = useCallback((value: string) => {
+    if (!value) {
+      setErrors((prev) => ({ ...prev, email: "Email is required" }));
+      return;
+    }
+    const result = validateEmail(value);
+    if (!result.isValid) {
+      setErrors((prev) => ({ ...prev, email: result.error }));
+    } else {
+      setErrors((prev) => {
+        const { email, ...rest } = prev;
+        return rest;
+      });
+    }
+  }, []);
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (touched.email) {
+      validateEmailField(value);
+    }
+  };
+
+  const handleEmailBlur = () => {
+    setTouched((prev) => ({ ...prev, email: true }));
+    validateEmailField(email);
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (touched.password && !value) {
+      setErrors((prev) => ({ ...prev, password: "Password is required" }));
+    } else {
+      setErrors((prev) => {
+        const { password, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    setTouched((prev) => ({ ...prev, password: true }));
     if (!password) {
-      newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+      setErrors((prev) => ({ ...prev, password: "Password is required" }));
     }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  };
+
+  const navigateAfterAuth = () => {
+    if (isOnboardingComplete) {
+      router.replace("/(tabs)");
+    } else {
+      router.replace("/auth/onboarding");
+    }
   };
 
   const handleLogin = async () => {
-    if (!validateForm()) return;
-    
+    // Check rate limit first
+    const rateLimit = await checkRateLimit();
+    if (!rateLimit.allowed) {
+      setIsLocked(true);
+      setLockoutSeconds(rateLimit.lockoutSeconds || 300);
+      return;
+    }
+
+    // Final validation
+    const { isValid, errors: validationErrors } = validateLoginForm({
+      email,
+      password,
+    });
+
+    if (!isValid) {
+      setErrors(validationErrors);
+      return;
+    }
+
     setLoading(true);
     try {
-      // TODO: Implement Firebase Auth login
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      router.replace('/(tabs)');
+      await signInWithEmail(email, password);
+      // Reset rate limit on success
+      await resetRateLimit();
+      navigateAfterAuth();
     } catch (error) {
-      console.error('Login error:', error);
+      // Record failed attempt
+      const result = await recordFailedAttempt();
+      setRemainingAttempts(result.remainingAttempts);
+
+      if (!result.allowed) {
+        setIsLocked(true);
+        setLockoutSeconds(result.lockoutSeconds || 300);
+      }
+
+      const errorMessage =
+        error instanceof Error ? error.message : "An error occurred";
+
+      // Check if it's a "user not found" error
+      if (errorMessage.includes("No account found")) {
+        Alert.alert("Account Not Found", errorMessage, [
+          { text: "Cancel", style: "cancel" },
+          { text: "Sign Up", onPress: () => router.push("/auth/signup") },
+        ]);
+      } else {
+        Alert.alert(
+          "Login Failed",
+          result.remainingAttempts > 0
+            ? `${errorMessage}\n\n${result.remainingAttempts} attempts remaining.`
+            : errorMessage
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
     try {
-      // TODO: Implement Google Sign-In
-      console.log('Google login');
+      await signInWithGoogle();
+      navigateAfterAuth();
     } catch (error) {
-      console.error('Google login error:', error);
+      Alert.alert(
+        "Google Sign-In Failed",
+        error instanceof Error ? error.message : "An error occurred"
+      );
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
   const handleAppleLogin = async () => {
-    try {
-      // TODO: Implement Apple Sign-In
-      console.log('Apple login');
-    } catch (error) {
-      console.error('Apple login error:', error);
-    }
+    Alert.alert("Coming Soon", "Apple Sign-In will be available soon!");
   };
 
   const handleGuestMode = () => {
     Alert.alert(
-      'Continue as Guest',
-      'Guest mode has limited features:\n\n• Data stored locally only\n• No cloud sync\n• Limited collaboration\n\nYou can sign up anytime to unlock all features.',
+      "Continue as Guest",
+      "Guest mode has limited features:\n\n• Data stored locally only\n• No cloud sync\n• Limited collaboration\n\nYou can sign up anytime to unlock all features.",
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Continue', 
-          onPress: () => router.replace('/(tabs)'),
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          onPress: async () => {
+            await enableGuestMode();
+            router.replace("/(tabs)");
+          },
         },
       ]
     );
   };
 
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -109,21 +268,30 @@ export default function LoginScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <View style={styles.headerPlaceholder} />
           </View>
 
           {/* Title */}
           <View style={styles.titleContainer}>
-            <Text style={[styles.title, { color: colors.text }]}>Welcome back!</Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              Welcome back!
+            </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Sign in to continue planning your trips
             </Text>
           </View>
+
+          {/* Lockout Warning */}
+          {isLocked && (
+            <View
+              style={[styles.lockoutBanner, { backgroundColor: Colors.error + "15" }]}
+            >
+              <Ionicons name="lock-closed" size={20} color={Colors.error} />
+              <Text style={[styles.lockoutText, { color: Colors.error }]}>
+                Too many failed attempts. Try again in {formatTime(lockoutSeconds)}
+              </Text>
+            </View>
+          )}
 
           {/* Form */}
           <View style={styles.form}>
@@ -131,38 +299,45 @@ export default function LoginScreen() {
               label="Email"
               placeholder="Enter your email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
+              onBlur={handleEmailBlur}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
               leftIcon="mail-outline"
               error={errors.email}
+              editable={!isLocked}
             />
 
             <Input
               label="Password"
               placeholder="Enter your password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={handlePasswordChange}
+              onBlur={handlePasswordBlur}
               secureTextEntry
               autoComplete="password"
               leftIcon="lock-closed-outline"
               error={errors.password}
+              editable={!isLocked}
             />
 
             <TouchableOpacity
-              onPress={() => router.push('/auth/forgot-password')}
+              onPress={() => router.push("/auth/forgot-password")}
               style={styles.forgotPassword}
             >
-              <Text style={[styles.forgotPasswordText, { color: Colors.primary }]}>
+              <Text
+                style={[styles.forgotPasswordText, { color: Colors.primary }]}
+              >
                 Forgot password?
               </Text>
             </TouchableOpacity>
 
             <Button
-              title="Sign In"
+              title={isLocked ? `Locked (${formatTime(lockoutSeconds)})` : "Sign In"}
               onPress={handleLogin}
               loading={loading}
+              disabled={!isFormValid || loading || isLocked}
               fullWidth
               size="lg"
             />
@@ -172,28 +347,41 @@ export default function LoginScreen() {
           <Divider text="or continue with" />
 
           <View style={styles.socialButtons}>
-            <SocialButton provider="google" onPress={handleGoogleLogin} />
-            {Platform.OS === 'ios' && (
-              <SocialButton provider="apple" onPress={handleAppleLogin} style={{ marginTop: Spacing.sm }} />
+            <SocialButton
+              provider="google"
+              onPress={handleGoogleLogin}
+              loading={googleLoading}
+              disabled={isLocked}
+            />
+            {Platform.OS === "ios" && (
+              <SocialButton
+                provider="apple"
+                onPress={handleAppleLogin}
+                style={{ marginTop: Spacing.sm }}
+                disabled={isLocked}
+              />
             )}
           </View>
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
             <Text style={[styles.signupText, { color: colors.textSecondary }]}>
-              Don't have an account?{' '}
+              Don't have an account?{" "}
             </Text>
-            <TouchableOpacity onPress={() => router.push('/auth/signup')}>
-              <Text style={[styles.signupLink, { color: Colors.primary }]}>Sign up</Text>
+            <TouchableOpacity onPress={() => router.push("/auth/signup")}>
+              <Text style={[styles.signupLink, { color: Colors.primary }]}>
+                Sign up
+              </Text>
             </TouchableOpacity>
           </View>
 
           {/* Guest Mode */}
-          <TouchableOpacity 
-            onPress={handleGuestMode}
-            style={styles.guestButton}
-          >
-            <Ionicons name="person-outline" size={18} color={colors.textMuted} />
+          <TouchableOpacity onPress={handleGuestMode} style={styles.guestButton}>
+            <Ionicons
+              name="person-outline"
+              size={18}
+              color={colors.textMuted}
+            />
             <Text style={[styles.guestText, { color: colors.textMuted }]}>
               Skip for now, continue as guest
             </Text>
@@ -207,6 +395,8 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -220,12 +410,9 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     marginBottom: Spacing.lg,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   titleContainer: {
     marginBottom: Spacing.xl,
@@ -238,11 +425,24 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: FontSizes.md,
   },
+  lockoutBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  lockoutText: {
+    flex: 1,
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.medium,
+  },
   form: {
     gap: Spacing.xs,
   },
   forgotPassword: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     marginBottom: Spacing.md,
   },
   forgotPasswordText: {
@@ -253,8 +453,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   signupContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: Spacing.xl,
   },
   signupText: {
@@ -265,9 +465,9 @@ const styles = StyleSheet.create({
     fontWeight: FontWeights.semibold,
   },
   guestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.xs,
     paddingVertical: Spacing.lg,
     marginTop: Spacing.sm,

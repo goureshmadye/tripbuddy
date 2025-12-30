@@ -10,6 +10,9 @@ export interface User {
   email: string;
   profilePhoto?: string | null;
   defaultCurrency: string;
+  homeCountry?: string | null;
+  onboardingComplete?: boolean;
+  walkthroughComplete?: boolean;
   createdAt: Date;
 }
 

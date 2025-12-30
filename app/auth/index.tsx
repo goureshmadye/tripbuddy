@@ -1,9 +1,11 @@
+import LoadingScreen from '@/components/loading-screen';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     Alert,
     Dimensions,
@@ -21,6 +23,49 @@ export default function SplashScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { 
+    firebaseUser, 
+    loading, 
+    isOnboardingComplete, 
+    isWalkthroughComplete, 
+    isGuestMode,
+    isAuthenticated,
+    enableGuestMode 
+  } = useAuth();
+
+  // Redirect authenticated users based on onboarding status
+  useEffect(() => {
+    if (!loading) {
+      // If user is in guest mode, go directly to tabs
+      if (isGuestMode) {
+        router.replace('/(tabs)');
+        return;
+      }
+      
+      // If user is authenticated (logged in and not guest)
+      if (firebaseUser) {
+        if (!isOnboardingComplete) {
+          if (!isWalkthroughComplete) {
+            router.replace('/auth/walkthrough');
+          } else {
+            router.replace('/auth/onboarding');
+          }
+        } else {
+          router.replace('/(tabs)');
+        }
+      }
+    }
+  }, [loading, firebaseUser, isOnboardingComplete, isWalkthroughComplete, isGuestMode, router]);
+
+  // Show loading while checking auth state
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+
+  // If user is logged in or in guest mode, show loading while redirecting
+  if (firebaseUser || isGuestMode) {
+    return <LoadingScreen message="Loading your trips..." />;
+  }
 
   const handleContinue = () => {
     router.push('/auth/login');
@@ -34,7 +79,10 @@ export default function SplashScreen() {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Continue', 
-          onPress: () => router.replace('/(tabs)'),
+          onPress: async () => {
+            await enableGuestMode();
+            router.replace('/(tabs)');
+          },
         },
       ]
     );
@@ -135,6 +183,8 @@ function FeatureItem({ icon, title, description, colors }: FeatureItemProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   content: {
     flex: 1,

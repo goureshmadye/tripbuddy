@@ -1,12 +1,15 @@
 import { MapViewComponent, Marker, Polyline } from '@/components/maps';
+import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTripItinerary } from '@/hooks/use-trips';
 import { ItineraryItem } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Dimensions,
     Linking,
@@ -64,7 +67,7 @@ export default function MapScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const mapRef = useRef<any>(null);
 
-  const [items] = useState<ItineraryItem[]>([]);
+  const { items, loading, error } = useTripItinerary(id);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null);
@@ -284,14 +287,28 @@ export default function MapScreen() {
           )}
         </MapViewComponent>
 
+        {/* Loading Overlay */}
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.text }]}>Loading itinerary...</Text>
+          </View>
+        )}
+
+        {/* Error Overlay */}
+        {error && (
+          <View style={styles.errorOverlay}>
+            <EmptyState
+              icon="alert-circle-outline"
+              title="Unable to load itinerary"
+              description={error.message || "There was an error loading map markers."}
+            />
+          </View>
+        )}
+
         {/* Map Header Overlay */}
         <View style={styles.mapHeader}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.sm]}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
           
           {showSearch ? (
             <View style={[styles.searchContainer, { backgroundColor: colors.card }, Shadows.sm]}>
@@ -493,6 +510,8 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   mapContainer: {
     flex: 1,
@@ -500,6 +519,24 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: FontSizes.md,
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
   },
   mapHeader: {
     position: 'absolute',
@@ -509,6 +546,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     zIndex: 10,
+  },
+  headerPlaceholder: {
+    width: 44,
+    height: 44,
   },
   mapButton: {
     width: 44,

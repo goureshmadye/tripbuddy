@@ -92,6 +92,8 @@ export default function NoInternetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   content: {
     flex: 1,

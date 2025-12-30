@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,14 +16,6 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-interface User {
-  name: string;
-  email: string;
-  photoUrl: string | null;
-  currency: string;
-  country: string;
-}
 
 type SettingItem = {
   id: string;
@@ -41,6 +34,8 @@ export default function SettingsScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
+  const { user, signOutUser, refreshUser, isGuestMode, disableGuestMode } = useAuth();
+
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [offlineMode, setOfflineMode] = useState(false);
@@ -48,7 +43,6 @@ export default function SettingsScreen() {
   const [currentPlan, setCurrentPlan] = useState<'free' | 'pro' | 'premium'>('free');
   const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
   const [themeModalVisible, setThemeModalVisible] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
 
   const SUBSCRIPTION_PLANS = [
     {
@@ -89,11 +83,26 @@ export default function SettingsScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      isGuestMode ? 'Exit Guest Mode' : 'Sign Out',
+      isGuestMode ? 'Are you sure you want to exit guest mode? Your local data will be preserved.' : 'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => router.replace('/auth') },
+        { 
+          text: isGuestMode ? 'Exit' : 'Sign Out', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              if (isGuestMode) {
+                await disableGuestMode();
+              } else {
+                await signOutUser();
+              }
+              router.replace('/auth');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          }
+        },
       ]
     );
   };
@@ -120,8 +129,7 @@ export default function SettingsScreen() {
       title: 'Account',
       items: [
         { id: 'profile', icon: 'person-outline', label: 'Edit Profile', type: 'navigation' },
-        { id: 'currency', icon: 'cash-outline', label: 'Default Currency', value: user?.currency ?? 'USD', type: 'navigation' },
-        { id: 'country', icon: 'globe-outline', label: 'Country', value: user?.country ?? 'Not set', type: 'navigation' },
+        { id: 'currency', icon: 'cash-outline', label: 'Default Currency', value: user?.defaultCurrency ?? 'USD', type: 'navigation' },
       ],
     },
     {
@@ -214,12 +222,7 @@ export default function SettingsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
         <View style={styles.headerPlaceholder} />
       </View>
@@ -233,18 +236,63 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           activeOpacity={0.7}
+          onPress={() => {
+            if (isGuestMode) {
+              Alert.alert(
+                'Guest Mode',
+                'Sign in to customize your profile and sync your trips across devices.',
+                [
+                  { text: 'Later', style: 'cancel' },
+                  { 
+                    text: 'Sign In', 
+                    onPress: async () => {
+                      await disableGuestMode();
+                      router.replace('/auth/login');
+                    }
+                  },
+                ]
+              );
+            }
+          }}
         >
-          <View style={[styles.avatar, { backgroundColor: Colors.primary + '20' }]}>
-            <Text style={[styles.avatarText, { color: Colors.primary }]}>
-              {user?.name?.charAt(0) ?? '?'}
+          <View style={[styles.avatar, { backgroundColor: isGuestMode ? Colors.warning + '20' : Colors.primary + '20' }]}>
+            <Text style={[styles.avatarText, { color: isGuestMode ? Colors.warning : Colors.primary }]}>
+              {isGuestMode ? '?' : (user?.name?.charAt(0) ?? '?')}
             </Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: colors.text }]}>{user?.name ?? 'Guest User'}</Text>
-            <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>{user?.email ?? 'Not signed in'}</Text>
+            <Text style={[styles.profileName, { color: colors.text }]}>
+              {isGuestMode ? 'Guest User' : (user?.name ?? 'User')}
+            </Text>
+            <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>
+              {isGuestMode ? 'Tap to sign in' : (user?.email ?? 'Not signed in')}
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </TouchableOpacity>
+
+        {/* Guest Mode Banner */}
+        {isGuestMode && (
+          <View style={[styles.guestBanner, { backgroundColor: Colors.warning + '15', borderColor: Colors.warning }]}>
+            <Ionicons name="information-circle-outline" size={20} color={Colors.warning} />
+            <View style={styles.guestBannerText}>
+              <Text style={[styles.guestBannerTitle, { color: colors.text }]}>
+                You're in Guest Mode
+              </Text>
+              <Text style={[styles.guestBannerDescription, { color: colors.textSecondary }]}>
+                Sign in to sync your trips and access all features
+              </Text>
+            </View>
+            <Button
+              title="Sign In"
+              size="sm"
+              onPress={async () => {
+                await disableGuestMode();
+                router.replace('/auth/login');
+              }}
+            />
+          </View>
+        )}
 
         {/* Settings Sections */}
         {settingSections.map((section) => (
@@ -312,7 +360,7 @@ export default function SettingsScreen() {
         {/* Sign Out Button */}
         <View style={styles.signOutSection}>
           <Button
-            title="Sign Out"
+            title={isGuestMode ? "Exit Guest Mode" : "Sign Out"}
             onPress={handleLogout}
             variant="outline"
             fullWidth
@@ -434,6 +482,8 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   header: {
     flexDirection: 'row',
@@ -441,13 +491,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,
@@ -644,5 +687,26 @@ const styles = StyleSheet.create({
   themeOptionLabel: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.medium,
+  },
+  guestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    gap: Spacing.sm,
+  },
+  guestBannerText: {
+    flex: 1,
+  },
+  guestBannerTitle: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.semibold,
+  },
+  guestBannerDescription: {
+    fontSize: FontSizes.xs,
+    marginTop: 2,
   },
 });

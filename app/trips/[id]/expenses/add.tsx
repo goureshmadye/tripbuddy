@@ -1,11 +1,16 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTripCollaborators } from '@/hooks/use-trips';
+import { createExpense, createExpenseShare } from '@/services/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
@@ -13,7 +18,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 type ExpenseCategory = 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
 type ExpenseSplitType = 'equal' | 'percentage' | 'custom';
@@ -46,15 +51,40 @@ export default function AddExpenseScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
+  // Auth and collaborators
+  const { user } = useAuth();
+  const { collaborators, loading: collaboratorsLoading, error: collaboratorsError } = useTripCollaborators(id);
+
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [currency] = useState('EUR');
   const [category, setCategory] = useState<ExpenseCategory>('food');
   const [splitType, setSplitType] = useState<ExpenseSplitType>('equal');
-  const [paidBy, setPaidBy] = useState('user1');
+  const [paidBy, setPaidBy] = useState<string>('');
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; amount?: string }>({});
+
+  // Initialize paidBy to current user and members from collaborators
+  useEffect(() => {
+    if (user && !paidBy) {
+      setPaidBy(user.id);
+    }
+  }, [user, paidBy]);
+
+  useEffect(() => {
+    if (collaborators.length > 0 && members.length === 0) {
+      setMembers(
+        collaborators
+          .filter((c) => c.user)
+          .map((c) => ({
+            id: c.userId,
+            name: c.user!.name,
+            selected: true, // Default to all selected for equal split
+          }))
+      );
+    }
+  }, [collaborators, members.length]);
 
   const toggleMember = (memberId: string) => {
     setMembers(members.map(m => 
@@ -71,14 +101,45 @@ export default function AddExpenseScreen() {
       setErrors(newErrors);
       return;
     }
+
+    if (!user || !id) {
+      Alert.alert('Error', 'Unable to save expense. Please try again.');
+      return;
+    }
     
     setLoading(true);
     try {
-      // TODO: Save to Firestore
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const expenseAmount = parseFloat(amount);
+      
+      // Create expense in Firestore
+      const expenseId = await createExpense({
+        tripId: id,
+        title: title.trim(),
+        amount: expenseAmount,
+        currency,
+        paidBy,
+      });
+
+      // Create expense shares for selected members
+      const selectedMembers = members.filter((m) => m.selected);
+      if (selectedMembers.length > 0) {
+        const shareAmount = expenseAmount / selectedMembers.length;
+        
+        await Promise.all(
+          selectedMembers.map((member) =>
+            createExpenseShare({
+              expenseId,
+              userId: member.id,
+              shareAmount,
+            })
+          )
+        );
+      }
+
       router.back();
     } catch (error) {
       console.error('Save error:', error);
+      Alert.alert('Error', 'Failed to save expense. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -97,12 +158,7 @@ export default function AddExpenseScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
           <Text style={[styles.headerTitle, { color: colors.text }]}>Add Expense</Text>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -175,6 +231,16 @@ export default function AddExpenseScreen() {
           {/* Paid By */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Paid By</Text>
+            {collaboratorsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading members...</Text>
+              </View>
+            ) : collaboratorsError ? (
+              <Text style={[styles.errorText, { color: Colors.error }]}>
+                Error loading members. Please try again.
+              </Text>
+            ) : (
             <View style={styles.paidByOptions}>
               {members.map((member) => (
                 <TouchableOpacity
@@ -205,6 +271,7 @@ export default function AddExpenseScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            )}
           </View>
 
           {/* Split Type */}
@@ -307,6 +374,8 @@ export default function AddExpenseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -317,13 +386,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,
@@ -338,6 +400,21 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xxl,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  loadingText: {
+    fontSize: FontSizes.sm,
+  },
+  errorText: {
+    fontSize: FontSizes.sm,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
   },
   amountSection: {
     alignItems: 'center',

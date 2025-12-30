@@ -1,11 +1,13 @@
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Expense } from '@/types/database';
+import { useTripCollaborators, useTripExpenses } from '@/hooks/use-trips';
+import { Expense, User } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Dimensions,
     Linking,
@@ -15,7 +17,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 
 type ExpenseCategory = 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
@@ -46,14 +48,63 @@ export default function ExpensesScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [expenses] = useState<ExpenseWithDetails[]>([]);
-  const [balances] = useState<Balance[]>([]);
+  // Fetch expenses and collaborators from Firestore
+  const { expenses: rawExpenses, totalExpenses, loading: expensesLoading, error: expensesError } = useTripExpenses(id);
+  const { collaborators, loading: collaboratorsLoading, error: collaboratorsError } = useTripCollaborators(id);
+
   const [activeTab, setActiveTab] = useState<'all' | 'balances'>('all');
   const [splitSummaryVisible, setSplitSummaryVisible] = useState(false);
   const [settleModalVisible, setSettleModalVisible] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<{ from: string; to: string; amount: number } | null>(null);
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const loading = expensesLoading || collaboratorsLoading;
+  const error = expensesError || collaboratorsError;
+
+  // Map collaborators to a lookup for names
+  const collaboratorMap = useMemo(() => {
+    const map: Record<string, User> = {};
+    collaborators.forEach((c) => {
+      if (c.user) {
+        map[c.userId] = c.user;
+      }
+    });
+    return map;
+  }, [collaborators]);
+
+  // Transform raw expenses to include paidByName and category
+  const expenses: ExpenseWithDetails[] = useMemo(() => {
+    return rawExpenses.map((expense) => ({
+      ...expense,
+      paidByName: collaboratorMap[expense.paidBy]?.name || 'Unknown',
+      category: (expense as any).category || 'other',
+    }));
+  }, [rawExpenses, collaboratorMap]);
+
+  // Calculate balances from expenses
+  const balances: Balance[] = useMemo(() => {
+    if (collaborators.length === 0 || expenses.length === 0) return [];
+
+    // Calculate total paid by each person
+    const paidByPerson: Record<string, number> = {};
+    expenses.forEach((expense) => {
+      paidByPerson[expense.paidBy] = (paidByPerson[expense.paidBy] || 0) + expense.amount;
+    });
+
+    // For simplicity, assume equal split among all collaborators
+    const perPersonShare = totalExpenses / collaborators.length;
+
+    // Calculate balance: amount paid - amount owed
+    return collaborators
+      .filter((c) => c.user)
+      .map((c) => ({
+        userId: c.userId,
+        name: c.user!.name,
+        balance: (paidByPerson[c.userId] || 0) - perPersonShare,
+      }));
+  }, [collaborators, expenses, totalExpenses]);
+
+  // Calculate number of people for display
+  const peopleCount = collaborators.length || 1;
   
   const getCategoryConfig = (category?: string | null) => {
     return CATEGORY_CONFIG[category || 'other'] || CATEGORY_CONFIG.other;
@@ -125,12 +176,7 @@ export default function ExpensesScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Expenses</Text>
         <TouchableOpacity
           onPress={handleAddExpense}
@@ -146,7 +192,7 @@ export default function ExpensesScreen() {
           <Text style={styles.summaryLabel}>Total Expenses</Text>
           <View style={styles.summaryBadge}>
             <Ionicons name="people" size={14} color={Colors.primary} />
-            <Text style={styles.summaryBadgeText}>3 people</Text>
+            <Text style={styles.summaryBadgeText}>{peopleCount} {peopleCount === 1 ? 'person' : 'people'}</Text>
           </View>
         </View>
         <Text style={styles.summaryAmount}>{formatCurrency(totalExpenses)}</Text>
@@ -157,7 +203,7 @@ export default function ExpensesScreen() {
             <Text style={styles.summaryStatLabel}>Transactions</Text>
           </View>
           <View style={styles.summaryStat}>
-            <Text style={styles.summaryStatValue}>{formatCurrency(totalExpenses / 3)}</Text>
+            <Text style={styles.summaryStatValue}>{formatCurrency(totalExpenses / peopleCount)}</Text>
             <Text style={styles.summaryStatLabel}>Per Person</Text>
           </View>
         </View>
@@ -209,6 +255,26 @@ export default function ExpensesScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Loading State */}
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading expenses...</Text>
+        </View>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Error loading expenses"
+          description={error.message || 'Something went wrong. Please try again.'}
+          actionLabel="Retry"
+          onAction={() => router.replace(`/trips/${id}/expenses`)}
+        />
+      )}
+
+      {!loading && !error && (
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -360,6 +426,7 @@ export default function ExpensesScreen() {
           </View>
         )}
       </ScrollView>
+      )}
 
       {/* Split Summary Modal */}
       <Modal
@@ -384,8 +451,8 @@ export default function ExpensesScreen() {
               </View>
 
               <View style={[styles.splitSummaryCard, { backgroundColor: colors.backgroundSecondary }]}>
-                <Text style={[styles.splitSummaryLabel, { color: colors.textSecondary }]}>Per Person (3 people)</Text>
-                <Text style={[styles.splitSummaryAmount, { color: colors.text }]}>{formatCurrency(totalExpenses / 3)}</Text>
+                <Text style={[styles.splitSummaryLabel, { color: colors.textSecondary }]}>Per Person ({peopleCount} {peopleCount === 1 ? 'person' : 'people'})</Text>
+                <Text style={[styles.splitSummaryAmount, { color: colors.text }]}>{formatCurrency(totalExpenses / peopleCount)}</Text>
               </View>
 
               <View style={styles.categoryBreakdown}>
@@ -487,6 +554,18 @@ export default function ExpensesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Spacing.xxl,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: FontSizes.md,
   },
   header: {
     flexDirection: 'row',
@@ -495,12 +574,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,

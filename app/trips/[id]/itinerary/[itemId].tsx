@@ -1,10 +1,12 @@
+import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { ItineraryItem } from '@/types/database';
+import { useItineraryItem } from '@/hooks/use-trips';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     SafeAreaView,
     ScrollView,
@@ -39,16 +41,9 @@ export default function ItineraryItemDetailScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [item, setItem] = useState<ItineraryItem | null>(null);
+  const { item, loading, error } = useItineraryItem(itemId);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  // Simulate loading - in real app, fetch item data here
-  React.useEffect(() => {
-    // TODO: Fetch item data from Firebase
-    setLoading(false);
-  }, [itemId]);
 
   const config = item ? (CATEGORY_CONFIG[item.category || 'other'] || CATEGORY_CONFIG.other) : CATEGORY_CONFIG.other;
 
@@ -112,15 +107,28 @@ export default function ItineraryItemDetailScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
         </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: colors.textSecondary }}>Loading...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading activity...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <View style={styles.headerPlaceholder} />
+        </View>
+        <View style={styles.errorContainer}>
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Failed to load activity"
+            description={error.message || "Something went wrong. Please try again."}
+          />
         </View>
       </SafeAreaView>
     );
@@ -130,23 +138,14 @@ export default function ItineraryItemDetailScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
         </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl }}>
-          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary + '10', alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg }}>
-            <Ionicons name="calendar-outline" size={40} color={Colors.primary} />
-          </View>
-          <Text style={{ fontSize: FontSizes.xl, fontWeight: FontWeights.bold, color: colors.text, marginBottom: Spacing.sm, textAlign: 'center' }}>
-            Activity Not Found
-          </Text>
-          <Text style={{ fontSize: FontSizes.md, color: colors.textSecondary, textAlign: 'center' }}>
-            This activity may have been deleted or doesn't exist.
-          </Text>
+        <View style={styles.errorContainer}>
+          <EmptyState
+            icon="calendar-outline"
+            title="Activity Not Found"
+            description="This activity may have been deleted or doesn't exist."
+          />
         </View>
       </SafeAreaView>
     );
@@ -156,12 +155,7 @@ export default function ItineraryItemDetailScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
         <View style={styles.headerActions}>
           <TouchableOpacity
             onPress={handleEdit}
@@ -307,6 +301,8 @@ export default function ItineraryItemDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   header: {
     flexDirection: 'row',
@@ -315,12 +311,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerActions: {
     flexDirection: 'row',
@@ -488,5 +481,18 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: FontSizes.md,
+  },
+  errorContainer: {
+    flex: 1,
+    paddingHorizontal: Spacing.xl,
   },
 });

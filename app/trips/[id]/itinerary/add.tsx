@@ -1,12 +1,15 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { createItineraryItem } from '@/services/firestore';
 import { ItineraryCategory } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
@@ -29,6 +32,7 @@ const CATEGORIES: { id: ItineraryCategory; label: string; icon: keyof typeof Ion
 export default function AddItineraryItemScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
@@ -43,19 +47,58 @@ export default function AddItineraryItemScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string }>({});
 
+  const parseDateTime = (dateStr: string, timeStr: string): Date | null => {
+    if (!dateStr) return null;
+    try {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      if (timeStr) {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return new Date(year, month - 1, day, hours, minutes);
+      }
+      return new Date(year, month - 1, day);
+    } catch {
+      return null;
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       setErrors({ title: 'Title is required' });
       return;
     }
+
+    if (!id) {
+      Alert.alert('Error', 'Trip ID is missing');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to add activities');
+      return;
+    }
     
     setLoading(true);
     try {
-      // TODO: Save to Firestore
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const startDateTime = parseDateTime(date, startTime);
+      const endDateTime = parseDateTime(date, endTime);
+
+      await createItineraryItem({
+        tripId: id,
+        title: title.trim(),
+        description: description.trim() || null,
+        location: location.trim() || null,
+        category,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        addedBy: user.id,
+        latitude: null,
+        longitude: null,
+      });
+      
       router.back();
     } catch (error) {
       console.error('Save error:', error);
+      Alert.alert('Error', 'Failed to save activity. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -69,12 +112,7 @@ export default function AddItineraryItemScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
           <Text style={[styles.headerTitle, { color: colors.text }]}>Add Activity</Text>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -215,6 +253,8 @@ export default function AddItineraryItemScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -225,13 +265,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,
