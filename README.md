@@ -2,66 +2,62 @@
 
 ## 1\. Executive Summary
 
-TripBuddy is a mobile-first application designed to streamline travel planning. It solves the fragmentation problem of using spreadsheets, group chats, and disparate booking apps. By centralizing itineraries, expenses, documents, and real-time collaboration, TripBuddy acts as a single source of truth for solo travelers and groups.  
-  
+TripBuddy is a mobile-first application designed to streamline travel planning. It solves the fragmentation problem of using spreadsheets, group chats, and disparate booking apps. By centralizing itineraries, expenses, documents, and real-time collaboration, TripBuddy acts as a single source of truth for solo travelers and groups.
+
 **2\. Functional Specifications (MVP)**
 
 ### 2.1. Authentication & Onboarding
 
-*   **Methods:** Email/Password, Google OAuth (via Firebase).
-*   **Profile Setup:** Name, Profile Photo, Default Currency (USD default), Home Country.
-*   **Intro Walkthrough:** Carousel highlighting visual planning, expense splitting, and offline capabilities.
+- **Methods:** Email/Password, Google OAuth (via Firebase).
+- **Profile Setup:** Name, Profile Photo, Default Currency (USD default), Home Country.
+- **Intro Walkthrough:** Carousel highlighting visual planning, expense splitting, and offline capabilities.
 
 ### 2.2. Trip Management
 
-*   **Creation:** Users can create trips with a Title, Dates, Transportation Mode, and Trip Type (Leisure, Business, Adventure).
-*   **Dashboard:** "My Trips" view showing upcoming, past, and drafted trips.
+- **Creation:** Users can create trips with a Title, Dates, Transportation Mode, and Trip Type (Leisure, Business, Adventure).
+- **Dashboard:** "My Trips" view showing upcoming, past, and drafted trips.
 
 ### 2.3. Collaborative Itinerary
 
-*   **Views:**
-    *   **Timeline:** Chronological list of activities.
-    *   **Map:** Geospatial view of daily pins.
-    *   **List:** Compact view.
-*   **Item Details:** Title, Location (Lat/Long), Time, Notes, Tags.
-*   **Collaboration:** Real-time editing by "Editors." Comments on specific itinerary items.
+- **Views:**
+  - **Timeline:** Chronological list of activities.
+  - **Map:** Geospatial view of daily pins.
+  - **List:** Compact view.
+- **Item Details:** Title, Location (Lat/Long), Time, Notes, Tags.
+- **Collaboration:** Real-time editing by "Editors." Comments on specific itinerary items.
 
 ### 2.4. Expense Tracking & Splitting
 
-*   **Entry:** Record expenses with Amount, Payer, and Beneficiaries (who the cost is split with).
-*   **Settlement:** Calculate "Who owes whom."
-*   **Payment:** Integration with Google Pay/UPI for settling debts.
+- **Entry:** Record expenses with Amount, Payer, and Beneficiaries (who the cost is split with).
+- **Settlement:** Calculate "Who owes whom."
+- **Payment:** Integration with Google Pay/UPI for settling debts.
 
 ### 2.5. Documents & Offline Mode
 
-*   **Storage:** Upload tickets, hotel vouchers, and IDs.
-*   **Offline Sync:** Read-only access to itinerary and documents when no internet is available.
+- **Storage:** Upload tickets, hotel vouchers, and IDs.
+- **Offline Sync:** Read-only access to itinerary and documents when no internet is available.
 
 ## 3\. System Architecture
 
 ### 3.1. Tech Stack
 
-*   **Frontend:** React Native (Cross-platform Mobile).
-*   **Backend:** Node.js / Express.js.
-*   **Database:** PostgreSQL with Prisma ORM.
-*   **Auth & Storage:** Google Firebase.
-*   **Infrastructure:** AWS or Google Cloud Platform.
+- **Frontend:** React Native (Cross-platform Mobile).
+- **Backend:** Node.js / Express.js.
+- **Database:** PostgreSQL with Prisma ORM.
+- **Auth & Storage:** Google Firebase.
+- **Infrastructure:** AWS or Google Cloud Platform.
 
 ### 3.2. External Integrations
 
-| Service | Purpose |
-| --- | --- |
-| Google Maps SDK & Places API | Rendering maps, autocomplete search, routing. |
-| Google Pay / Stripe | Payment settlements and subscription processing. |
-| OpenAI API | GPT-based itinerary suggestions and route optimization. |
-| Firebase Cloud Messaging | Real-time push notifications. |
-| Nylas / MailboxLayer | Email parsing for auto-importing bookings. |
+| Service                      | Purpose                                                 |
+| ---------------------------- | ------------------------------------------------------- |
+| Google Maps SDK & Places API | Rendering maps, autocomplete search, routing.           |
+| Google Pay / Stripe          | Payment settlements and subscription processing.        |
+| OpenAI API                   | GPT-based itinerary suggestions and route optimization. |
+| Firebase Cloud Messaging     | Real-time push notifications.                           |
+| Nylas / MailboxLayer         | Email parsing for auto-importing bookings.              |
 
-##   
-  
-  
-  
-  
+##
 
 ## 4\. Data Model (PostgreSQL + Prisma)
 
@@ -74,96 +70,92 @@ CREATE TABLE users (
 id UUID PRIMARY KEY,  
 name TEXT NOT NULL,  
 email TEXT UNIQUE NOT NULL,  
-profile\_photo TEXT,  
-default\_currency TEXT DEFAULT 'USD',  
-created\_at TIMESTAMP DEFAULT NOW()  
-);  
-  
+profile_photo TEXT,  
+default_currency TEXT DEFAULT 'USD',  
+created_at TIMESTAMP DEFAULT NOW()  
+);
+
 \-- Trips Table  
 CREATE TABLE trips (  
 id UUID PRIMARY KEY,  
 title TEXT NOT NULL,  
-start\_date DATE NOT NULL,  
-end\_date DATE NOT NULL,  
-creator\_id UUID REFERENCES users(id),  
-transportation\_mode TEXT,  
-trip\_type TEXT,  
-created\_at TIMESTAMP DEFAULT NOW()  
-);  
-  
+start_date DATE NOT NULL,  
+end_date DATE NOT NULL,  
+creator_id UUID REFERENCES users(id),  
+transportation_mode TEXT,  
+trip_type TEXT,  
+created_at TIMESTAMP DEFAULT NOW()  
+);
+
 \-- Trip Collaborators (Junction Table)  
-CREATE TABLE trip\_collaborators (  
+CREATE TABLE trip_collaborators (  
 id UUID PRIMARY KEY,  
-trip\_id UUID REFERENCES trips(id),  
-user\_id UUID REFERENCES users(id),  
+trip_id UUID REFERENCES trips(id),  
+user_id UUID REFERENCES users(id),  
 role TEXT DEFAULT 'editor' -- values: viewer, editor, owner  
-);  
+);
 
 ### 4.2. Itinerary & Logistics
 
 \-- Itinerary Items  
-CREATE TABLE itinerary\_items (  
+CREATE TABLE itinerary_items (  
 id UUID PRIMARY KEY,  
-trip\_id UUID REFERENCES trips(id),  
+trip_id UUID REFERENCES trips(id),  
 title TEXT NOT NULL,  
 description TEXT,  
 location TEXT,  
 latitude DOUBLE PRECISION,  
 longitude DOUBLE PRECISION,  
 category TEXT,  
-start\_time TIMESTAMP,  
-end\_time TIMESTAMP,  
-added\_by UUID REFERENCES users(id),  
-created\_at TIMESTAMP DEFAULT NOW()  
-);  
-  
+start_time TIMESTAMP,  
+end_time TIMESTAMP,  
+added_by UUID REFERENCES users(id),  
+created_at TIMESTAMP DEFAULT NOW()  
+);
+
 \-- Location Sharing  
-CREATE TABLE user\_locations (  
-user\_id UUID REFERENCES users(id),  
-trip\_id UUID REFERENCES trips(id),  
+CREATE TABLE user_locations (  
+user_id UUID REFERENCES users(id),  
+trip_id UUID REFERENCES trips(id),  
 latitude DOUBLE PRECISION,  
 longitude DOUBLE PRECISION,  
-last\_updated TIMESTAMP DEFAULT NOW(),  
-PRIMARY KEY(user\_id, trip\_id)  
-);  
+last_updated TIMESTAMP DEFAULT NOW(),  
+PRIMARY KEY(user_id, trip_id)  
+);
 
 Technical Note on Location:
-
-To optimize routes, the backend will calculate distances between itinerary items. For two points:  
-![](data:image/png;base64,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V8eOnbw21C7r7ar33bRpU/DVV18FRx99jNcOAEDc4oxhjjnm2ODpp58Oa4+ZmFp3o1BqpT553655il+OP753tI20vQ477HCvDypHYg5AqrSy0KeffhqdyC+44AKvT16dccaZ4cIPp59+uteGdFx33fXhcbNixYpUVvF94okngpaWdd7jqE8etqvOPTqW1q5dG56X3HYAAOKURAwzZsyYKKaWoUOHen1QvTxv1zzFL8uXL4+20YwZM7x2VI7EHIBUaeq1OYF/9tlnwa677ub1yStdpDVjbq+99vbakLwTTjghvPVZo4SHH36E1x43jY7qGJ02bbrXhtrlabvOmTMnPBfNmTPXawMAIC5JxTC6pmqgy8TWFOKPR963a17il4svHhRtIx3furvI7YPKkJgDkKolS5ZEJ/Dp07P/Yl6NhQufCC867uNInmqyvPfee+FxM3r0DV57Eo49tlf4foMGDfbaULs8bdd99tk3+PDDD8PPc9VVV3vtAADUK+kYZvz4CVFsrVsKu3Tp6vVB9fK8XfMSv+y88y7B5s2bo+00dOhlXh9UhsQcgNR07tyloGbD6aef4fXJMy1rv3TpUu9xJGtbTZZF4THz6quvplbnw9xyouPWbUPt8rZdtSKePk8e6rUAAJpLGjHMIYccGsXWcuON1EKOQ963a17iF83aM9vohRde8NpRGRJzAFJjvpDLxx9/nEhwkhTVAvn73/8eTJkyxWtDskaNui48Zr755ptUC8suXvx05nXQmlEet6v50pSHei0AgOaRVgyjpJ+JsdesWeO1ozZ53655iF8uvfTSaBt9++23wYEHdvT6oHUk5gCkZtWqVdGJe/bsOV57nmkkSj8XXjjAa0NyjjzyqPD2YR0zDz00zWtPihKxW7duTfU924K8bteePY+MZvNSvBgAEIc0Y5hrrrkmirElyxlUzSTv2zUP8UunTp0LttGIESO9PmgdiTkAqdAooX3S1iIQbp88u/zyK8LE3MEHd/PakJyFCxeGx4sC2y5d0rv1sXfvbUvAq6it24ba5Xm7mkLKGu3t3v0wrx0AgGqkGcPst1+HKAkoU6bc4fVB9Rphu+YhfvnjH/8YbaM//OEPXjtaR2IOQComTLilIDF36KHdvT55Nm3atODHH3/0Hkdyjjrq6Oh4uffee732pOy442+igr/duh3itaM2ed+uqiWjW430+R555BGvHQCASmURwyxa9GT0nqqL3EglY/Is79s1D/HL5MlTCr7n6TO5fVAeiTkAqdDoiTlZaxUhtz3vXn/99eCtt97yHkdyFixYEB4vX375ZXDAAQd67XHSCKOCilWrVheMjOr/ly9fHiaW85hMyrtG26661UifT6POjTZ4AADIjzRjGEPlVuzkyJlnnun1QfUaYbtmHb9om9jbaNiwYV4flEdiDkDi9tpr7/BCYU7WWY3m1OPf//3fg4cfnuk9jmT07Nkzqplx1113e+1x0S0K999/fzTSqOTrxIkTw/fWIgXjxo2LaiMquGYZ+Mo06nY9/PAjovPUww8/7LUDANCatGIY1267tQu2bNkSXcdmziRujUMjbNes45ddd90tjOfMZ1Bi2u2D8kjMAUjc2Wf/NjpRy9ChQ70+eaaipvpRAVi3DcmYN29edLz06NHDa69Xu3a7BzfddFMYaCl5pMD52GN7hW0nnHBC+L4DBgyM+g8aNDj4/PPPw8enT58e7LDDjt5rojm267JlL4efR58/T7P5AACNIekYphwtAGDeW4st6brs9kH1GmG7Zh2/PPvss9E22rRpUy5iukZCYg5A4ty6AwcddLDXJ8/OO++8MDF33HHHe22I3xFH9IhGmnW7o9ter/bt20eztRS8XHDBhQXtN9xwY9jmLveuBUvMMfy7353jvW5b1yzb9dJLL40+j5KFbjsAAKUkHcO05owzCm8pHDjwIq8PqtcI2zXr+OX2228v2EZaldjtg9JIzAFI3GuvvRadpDdu3Oi1592kSZOCn3/+Odhll129NsRv9uxtq0tJ3Kv37r33PmG9QL226pxdcMEFXp+nnlocrF271ntcixeoPqKeqwRUuZHAvBUGTlpa29X0dx+L0+677xHdsqLfpdEGEgAA2UkyhqmESkmYMhKia6/bpzU77bSz91hbF8d2lSRjmKzjF90FYbaPXHvttV4flEZiDkCi9IXdri/30ksveX3y7vnnXwg2bdrsPY74abEAc7x88cUXwZ577uX1qcesWbOiY/H660d77UqoffbZZ2ERXbdNnnnmmej5ujXTblNCSUG4FjpRnQ3d6rBy5crguuuub/qkbpLb1X4N3Qa7ceOmsJaK2x6nBx54MPo8+n+3HQAAV9IxTGuUPFq9etsgmaFkkh53+7q6du0aJhU/+OCDcMbfe++9Fzz2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)  
-  
 
 **4.3. Financials & Assets**
 
 \-- Expenses  
 CREATE TABLE expenses (  
 id UUID PRIMARY KEY,  
-trip\_id UUID REFERENCES trips(id),  
+trip_id UUID REFERENCES trips(id),  
 title TEXT NOT NULL,  
 amount DECIMAL(10, 2) NOT NULL,  
 currency TEXT DEFAULT 'USD',  
-paid\_by UUID REFERENCES users(id),  
-created\_at TIMESTAMP DEFAULT NOW()  
-);  
-  
+paid_by UUID REFERENCES users(id),  
+created_at TIMESTAMP DEFAULT NOW()  
+);
+
 \-- Expense Shares (Split Logic)  
-CREATE TABLE expense\_shares (  
+CREATE TABLE expense_shares (  
 id UUID PRIMARY KEY,  
-expense\_id UUID REFERENCES expenses(id),  
-user\_id UUID REFERENCES users(id),  
-share\_amount DECIMAL(10, 2) NOT NULL  
-);  
-  
+expense_id UUID REFERENCES expenses(id),  
+user_id UUID REFERENCES users(id),  
+share_amount DECIMAL(10, 2) NOT NULL  
+);
+
 \-- Documents  
 CREATE TABLE documents (  
 id UUID PRIMARY KEY,  
-trip\_id UUID REFERENCES trips(id),  
-uploaded\_by UUID REFERENCES users(id),  
-file\_url TEXT NOT NULL, -- Link to Firebase Storage  
+trip_id UUID REFERENCES trips(id),  
+uploaded_by UUID REFERENCES users(id),  
+file_url TEXT NOT NULL, -- Link to Firebase Storage  
 label TEXT,  
 type TEXT, -- flight, hotel, activity  
-created\_at TIMESTAMP DEFAULT NOW()  
-);  
+created_at TIMESTAMP DEFAULT NOW()  
+);
 
 ## 5\. API Specification
 
@@ -171,41 +163,41 @@ The backend will expose RESTful endpoints.
 
 ### Auth & User
 
-*   POST /auth/signup & POST /auth/login
-*   POST /auth/google (OAuth Handler)
-*   GET /user/profile & PUT /user/profile
+- POST /auth/signup & POST /auth/login
+- POST /auth/google (OAuth Handler)
+- GET /user/profile & PUT /user/profile
 
 ### Trips & Collaboration
 
-*   POST /trips (Create Trip)
-*   GET /trips/:tripId (Get Trip Details)
-*   POST /trips/:tripId/invite (Add Collaborator)
-*   PUT /trips/:tripId/collaborators/:userId (Update Role)
+- POST /trips (Create Trip)
+- GET /trips/:tripId (Get Trip Details)
+- POST /trips/:tripId/invite (Add Collaborator)
+- PUT /trips/:tripId/collaborators/:userId (Update Role)
 
 ### Itinerary
 
-*   GET /trips/:tripId/itinerary (Fetch all items)
-*   POST /trips/:tripId/itinerary (Add item)
-*   PUT /itinerary/:itemId (Update time/location)
-*   POST /itinerary/:itemId/comments (Add comment)
+- GET /trips/:tripId/itinerary (Fetch all items)
+- POST /trips/:tripId/itinerary (Add item)
+- PUT /itinerary/:itemId (Update time/location)
+- POST /itinerary/:itemId/comments (Add comment)
 
 ### Expenses
 
-*   POST /trips/:tripId/expenses (Log expense)
-*   GET /expenses/:tripId/summary (Returns total spend + who owes whom calculations)
+- POST /trips/:tripId/expenses (Log expense)
+- GET /expenses/:tripId/summary (Returns total spend + who owes whom calculations)
 
 ### Sync & Data
 
-*   GET /trips/:tripId/export (JSON payload for local storage/offline mode)
-*   POST /trips/:tripId/documents (Upload metadata for stored files)
+- GET /trips/:tripId/export (JSON payload for local storage/offline mode)
+- POST /trips/:tripId/documents (Upload metadata for stored files)
 
 ## 6\. UI/UX Wireframe Guidelines
 
 1.  **Splash & Onboarding:** Clean, high-quality travel imagery. Quick account creation to minimize friction.
 2.  **Dashboard:** Card-based layout. "Create Trip" should be a sticky action button (FAB).
 3.  **Itinerary View:**
-    *   **Header:** Dynamic map snippet at the top.
-    *   **Body:** Scrollable timeline. Each item is a clickable card expanding to show notes and attachments.
+    - **Header:** Dynamic map snippet at the top.
+    - **Body:** Scrollable timeline. Each item is a clickable card expanding to show notes and attachments.
 4.  **Expense Tab:** Visual bar chart of spending vs. budget. List of recent transactions below.
 5.  **Map Screen:** Full-screen Google Maps integration. Pins color-coded by "Day" or "Category" (Food vs. Travel).
 
@@ -213,37 +205,37 @@ The backend will expose RESTful endpoints.
 
 TripBuddy operates on a Freemium SaaS model.
 
-| Feature | Free Plan | Pro ($4.99/mo) | Teams ($99/yr) |
-| --- | --- | --- | --- |
-| Collab | Max 2 Users | Unlimited | Up to 10 Members |
-| Expenses | 10 Entries | Unlimited + Auto-split | Unlimited |
-| Docs | 5 Uploads | Unlimited + Scanning | Unlimited |
-| AI | None | Itinerary Suggestions | Shared Templates |
-| Offline | Read-Only | Full Sync | Full Sync |
-| Target | Solo/Casual | Families/Power Users | Agencies/Tour Groups |
+| Feature  | Free Plan   | Pro ($4.99/mo)         | Teams ($99/yr)       |
+| -------- | ----------- | ---------------------- | -------------------- |
+| Collab   | Max 2 Users | Unlimited              | Up to 10 Members     |
+| Expenses | 10 Entries  | Unlimited + Auto-split | Unlimited            |
+| Docs     | 5 Uploads   | Unlimited + Scanning   | Unlimited            |
+| AI       | None        | Itinerary Suggestions  | Shared Templates     |
+| Offline  | Read-Only   | Full Sync              | Full Sync            |
+| Target   | Solo/Casual | Families/Power Users   | Agencies/Tour Groups |
 
 ## 8\. Development Roadmap
 
 ### Phase 1: Foundation (Weeks 1-4)
 
-*   Setup PostgreSQL database and Prisma schema.
-*   Implement Authentication (Firebase + Node.js).
-*   Develop basic Trip CRUD APIs.
+- Setup PostgreSQL database and Prisma schema.
+- Implement Authentication (Firebase + Node.js).
+- Develop basic Trip CRUD APIs.
 
 ### Phase 2: Core Experience (Weeks 5-8)
 
-*   Build Itinerary UI (Timeline & Map integration).
-*   Implement Real-time collaboration (WebSockets/Supabase Realtime).
-*   Location Autocomplete integration.
+- Build Itinerary UI (Timeline & Map integration).
+- Implement Real-time collaboration (WebSockets/Supabase Realtime).
+- Location Autocomplete integration.
 
 ### Phase 3: Utility Features (Weeks 9-12)
 
-*   Expense tracking logic and database implementation.
-*   Document upload to Firebase Storage.
-*   Offline logic (Local SQLite caching).
+- Expense tracking logic and database implementation.
+- Document upload to Firebase Storage.
+- Offline logic (Local SQLite caching).
 
 ### Phase 4: Polish & Pro (Weeks 13-16)
 
-*   Integrate OpenAI for route suggestions.
-*   Subscription payment gateway (Stripe/Google Pay).
-*   Beta testing and bug fixes.
+- Integrate OpenAI for route suggestions.
+- Subscription payment gateway (Stripe/Google Pay).
+- Beta testing and bug fixes.
