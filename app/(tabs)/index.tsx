@@ -1,98 +1,416 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { TripCard } from '@/components/trips/trip-card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Trip } from '@/types/database';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import {
+    Modal,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function MyTripsScreen() {
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const colors = isDark ? Colors.dark : Colors.light;
 
-export default function HomeScreen() {
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [tripCode, setTripCode] = useState('');
+  const [joiningTrip, setJoiningTrip] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    // TODO: Fetch trips from Firestore
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setRefreshing(false);
+  }, []);
+
+  const filteredTrips = trips.filter((trip) => {
+    const now = new Date();
+    const endDate = new Date(trip.endDate);
+    const startDate = new Date(trip.startDate);
+    
+    switch (filter) {
+      case 'upcoming':
+        return startDate > now;
+      case 'past':
+        return endDate < now;
+      default:
+        return true;
+    }
+  });
+
+  const handleTripPress = (tripId: string) => {
+    router.push(`/trips/${tripId}`);
+  };
+
+  const handleCreateTrip = () => {
+    router.push('/trips/create');
+  };
+
+  const handleJoinWithCode = async () => {
+    if (!tripCode.trim()) {
+      Alert.alert('Error', 'Please enter a trip code');
+      return;
+    }
+
+    setJoiningTrip(true);
+    try {
+      // TODO: Validate and join trip via Firestore
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Simulate success
+      Alert.alert(
+        'Success!',
+        'You\'ve joined the trip successfully.',
+        [{ text: 'OK', onPress: () => {
+          setJoinModalVisible(false);
+          setTripCode('');
+          // TODO: Navigate to the joined trip
+        }}]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Invalid trip code. Please check and try again.');
+    } finally {
+      setJoiningTrip(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+            Welcome back,
+          </Text>
+          <Text style={[styles.userName, { color: colors.text }]}>Traveler! 👋</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.profileButton, { backgroundColor: colors.backgroundSecondary }]}
+          onPress={() => router.push('/settings')}
+        >
+          <Ionicons name="person-outline" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {/* Action Buttons - New Trip + Join with Code */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: Colors.primary }]}
+          onPress={handleCreateTrip}
+        >
+          <Ionicons name="add" size={20} color="#FFFFFF" />
+          <Text style={styles.actionButtonText}>New Trip</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+          onPress={() => setJoinModalVisible(true)}
+        >
+          <Ionicons name="enter-outline" size={20} color={Colors.primary} />
+          <Text style={[styles.actionButtonText, { color: Colors.primary }]}>Join with Code</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Quick Stats */}
+      <View style={styles.statsContainer}>
+        <View style={[styles.statCard, { backgroundColor: Colors.primary + '15' }]}>
+          <Ionicons name="airplane" size={24} color={Colors.primary} />
+          <Text style={[styles.statNumber, { color: colors.text }]}>{trips.length}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Trips</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: Colors.secondary + '15' }]}>
+          <Ionicons name="calendar" size={24} color={Colors.secondary} />
+          <Text style={[styles.statNumber, { color: colors.text }]}>
+            {trips.filter(t => new Date(t.startDate) > new Date()).length}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Upcoming</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: Colors.accent + '15' }]}>
+          <Ionicons name="people" size={24} color={Colors.accent} />
+          <Text style={[styles.statNumber, { color: colors.text }]}>5</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Friends</Text>
+        </View>
+      </View>
+
+      {/* Filter Tabs */}
+      <View style={styles.filterContainer}>
+        {(['all', 'upcoming', 'past'] as const).map((f) => (
+          <TouchableOpacity
+            key={f}
+            style={[
+              styles.filterTab,
+              filter === f && { backgroundColor: Colors.primary },
+            ]}
+            onPress={() => setFilter(f)}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                { color: filter === f ? '#FFFFFF' : colors.textSecondary },
+              ]}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Trips List */}
+      <ScrollView
+        style={styles.tripsList}
+        contentContainerStyle={styles.tripsListContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {filteredTrips.length === 0 ? (
+          <EmptyState
+            icon="airplane-outline"
+            title="No trips yet"
+            description="Start planning your next adventure! Create a trip and invite your friends to collaborate."
+            actionLabel="Create Trip"
+            onAction={handleCreateTrip}
+          />
+        ) : (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Your Trips
+              </Text>
+            </View>
+            {filteredTrips.map((trip) => (
+              <TripCard
+                key={trip.id}
+                trip={trip}
+                onPress={() => handleTripPress(trip.id)}
+              />
+            ))}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Join with Code Modal */}
+      <Modal
+        visible={joinModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setJoinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Join a Trip</Text>
+              <TouchableOpacity onPress={() => setJoinModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
+              Enter the trip code shared by your friend to join their trip.
+            </Text>
+
+            <View style={[styles.codeInputContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="key-outline" size={20} color={colors.textMuted} />
+              <TextInput
+                style={[styles.codeInput, { color: colors.text }]}
+                placeholder="Enter trip code"
+                placeholderTextColor={colors.textMuted}
+                value={tripCode}
+                onChangeText={setTripCode}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={8}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.joinButton, { opacity: joiningTrip ? 0.7 : 1 }]}
+              onPress={handleJoinWithCode}
+              disabled={joiningTrip}
+            >
+              {joiningTrip ? (
+                <Text style={styles.joinButtonText}>Joining...</Text>
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                  <Text style={styles.joinButtonText}>Join Trip</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  greeting: {
+    fontSize: FontSizes.sm,
+  },
+  userName: {
+    fontSize: FontSizes.xxl,
+    fontWeight: FontWeights.bold,
+  },
+  profileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  actionButtonText: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.semibold,
+    color: '#FFFFFF',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    gap: 4,
+  },
+  statNumber: {
+    fontSize: FontSizes.xl,
+    fontWeight: FontWeights.bold,
+  },
+  statLabel: {
+    fontSize: FontSizes.xs,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  filterTab: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+  },
+  filterText: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.medium,
+  },
+  tripsList: {
+    flex: 1,
+  },
+  tripsListContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xxxl + Spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.semibold,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xxxl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitle: {
+    fontSize: FontSizes.xl,
+    fontWeight: FontWeights.bold,
+  },
+  modalDescription: {
+    fontSize: FontSizes.md,
+    marginBottom: Spacing.lg,
+    lineHeight: 22,
+  },
+  codeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
+  codeInput: {
+    flex: 1,
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.semibold,
+    letterSpacing: 2,
+  },
+  joinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+  },
+  joinButtonText: {
+    color: '#FFFFFF',
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.semibold,
   },
 });

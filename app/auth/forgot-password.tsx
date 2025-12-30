@@ -1,0 +1,258 @@
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+
+export default function ForgotPasswordScreen() {
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const colors = isDark ? Colors.dark : Colors.light;
+
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError('Email is required');
+      return;
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Please enter a valid email');
+      return;
+    }
+    
+    setError('');
+    setLoading(true);
+    try {
+      // TODO: Implement Firebase password reset
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setSent(true);
+    } catch (error) {
+      console.error('Reset password error:', error);
+      setError('Failed to send reset email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.successContent}>
+          <View style={[styles.successIcon, { backgroundColor: Colors.success + '15' }]}>
+            <Ionicons name="mail-open-outline" size={48} color={Colors.success} />
+          </View>
+          <Text style={[styles.successTitle, { color: colors.text }]}>Check your email</Text>
+          <Text style={[styles.successText, { color: colors.textSecondary }]}>
+            We've sent password reset instructions to{'\n'}
+            <Text style={{ fontWeight: FontWeights.semibold }}>{email}</Text>
+          </Text>
+          <Button
+            title="Back to Login"
+            onPress={() => router.replace('/auth/login')}
+            fullWidth
+            size="lg"
+            style={{ marginTop: Spacing.xl }}
+          />
+          <TouchableOpacity
+            onPress={() => setSent(false)}
+            style={styles.resendButton}
+          >
+            <Text style={[styles.resendText, { color: Colors.primary }]}>
+              Didn't receive email? Try again
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Icon */}
+          <View style={styles.iconContainer}>
+            <View style={[styles.iconBackground, { backgroundColor: Colors.primary + '15' }]}>
+              <Ionicons name="key-outline" size={40} color={Colors.primary} />
+            </View>
+          </View>
+
+          {/* Title */}
+          <View style={styles.titleContainer}>
+            <Text style={[styles.title, { color: colors.text }]}>Forgot Password?</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              No worries! Enter your email and we'll send you reset instructions.
+            </Text>
+          </View>
+
+          {/* Form */}
+          <View style={styles.form}>
+            <Input
+              label="Email"
+              placeholder="Enter your email"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                setError('');
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              leftIcon="mail-outline"
+              error={error}
+            />
+
+            <Button
+              title="Send Reset Link"
+              onPress={handleResetPassword}
+              loading={loading}
+              fullWidth
+              size="lg"
+            />
+          </View>
+
+          {/* Back to Login */}
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backToLogin}
+          >
+            <Ionicons name="arrow-back" size={16} color={Colors.primary} />
+            <Text style={[styles.backToLoginText, { color: Colors.primary }]}>
+              Back to Login
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  header: {
+    paddingTop: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconContainer: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  iconBackground: {
+    width: 80,
+    height: 80,
+    borderRadius: BorderRadius.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleContainer: {
+    marginBottom: Spacing.xl,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: FontSizes.xxl,
+    fontWeight: FontWeights.bold,
+    marginBottom: Spacing.sm,
+  },
+  subtitle: {
+    fontSize: FontSizes.md,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  form: {
+    gap: Spacing.md,
+  },
+  backToLogin: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.xl,
+    gap: Spacing.xs,
+  },
+  backToLoginText: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.medium,
+  },
+  successContent: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+  },
+  successTitle: {
+    fontSize: FontSizes.xxl,
+    fontWeight: FontWeights.bold,
+    marginBottom: Spacing.sm,
+  },
+  successText: {
+    fontSize: FontSizes.md,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  resendButton: {
+    marginTop: Spacing.md,
+    padding: Spacing.sm,
+  },
+  resendText: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.medium,
+  },
+});
