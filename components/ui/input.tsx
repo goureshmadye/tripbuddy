@@ -1,4 +1,4 @@
-import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { BorderRadius, Colors, ComponentSizes, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
@@ -138,15 +138,15 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: BorderRadius.lg,
-    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: BorderRadius.input,
+    minHeight: ComponentSizes.inputHeight,
   },
   input: {
     flex: 1,
-    fontSize: FontSizes.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
+    fontSize: 15,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 14,
   },
   inputWithLeftIcon: {
     paddingLeft: 0,

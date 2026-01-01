@@ -4,11 +4,11 @@ import { Trip } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    ViewStyle,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ViewStyle,
 } from 'react-native';
 
 interface TripCardProps {
@@ -83,8 +83,8 @@ export function TripCard({ trip, onPress, style }: TripCardProps) {
       activeOpacity={0.7}
       style={[
         styles.container,
-        { backgroundColor: colors.card, borderColor: colors.border },
-        Shadows.md,
+        { backgroundColor: colors.card },
+        Shadows.card,
         style,
       ]}
     >
@@ -130,15 +130,15 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.card,
+    borderWidth: 0, // Clean look without border
+    marginBottom: Spacing.md,
   },
   iconContainer: {
     width: 56,
     height: 56,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     marginRight: Spacing.sm,
   },
   title: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
     marginBottom: 4,
   },
@@ -159,16 +159,16 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   dateText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   tag: {
     alignSelf: 'flex-start',
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.chip,
   },
   tagText: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     fontWeight: FontWeights.medium,
   },
   statusContainer: {
@@ -178,10 +178,10 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.chip,
   },
   statusText: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     fontWeight: FontWeights.semibold,
   },
 });

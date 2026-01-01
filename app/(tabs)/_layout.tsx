@@ -1,13 +1,16 @@
+import LoadingScreen from '@/components/loading-screen';
 import { NavItem, ResponsiveLayout } from '@/components/navigation';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useUnreadNotificationCount } from '@/hooks/use-notifications';
 import { useResponsive } from '@/hooks/use-responsive';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Redirect, Slot, useRouter, useSegments } from 'expo-router';
 import React, { useMemo } from 'react';
 import { StatusBar, StyleSheet, View } from 'react-native';
 
-// Define navigation items for the app
-const NAV_ITEMS: NavItem[] = [
+// Base navigation items (badge will be added dynamically)
+const BASE_NAV_ITEMS: Omit<NavItem, 'badge'>[] = [
   {
     key: 'index',
     label: 'My Trips',
@@ -19,7 +22,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Notifications',
     icon: 'notifications-outline',
     iconFilled: 'notifications',
-    badge: 3,
   },
   {
     key: 'profile',
@@ -51,6 +53,34 @@ export default function TabLayout() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
   const { showSidebar } = useResponsive();
+  const unreadCount = useUnreadNotificationCount();
+  
+  // Auth guard - redirect unauthenticated users to auth
+  const { firebaseUser, loading, isGuestMode, isWalkthroughComplete } = useAuth();
+
+  // Show loading while checking auth state
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+
+  // If user is not authenticated and not in guest mode, redirect to auth
+  if (!firebaseUser && !isGuestMode) {
+    // If walkthrough not complete, go to walkthrough first
+    if (!isWalkthroughComplete) {
+      return <Redirect href="/auth/walkthrough" />;
+    }
+    // Otherwise go to auth landing page
+    return <Redirect href="/auth" />;
+  }
+
+  // Build nav items with dynamic badge count
+  // Only show badge when unreadCount > 0, otherwise hide it completely
+  const navItems: NavItem[] = useMemo(() => {
+    return BASE_NAV_ITEMS.map((item) => ({
+      ...item,
+      badge: item.key === 'notifications' && unreadCount > 0 ? unreadCount : undefined,
+    }));
+  }, [unreadCount]);
 
   // Determine active tab from segments
   const activeItem = useMemo(() => {
@@ -85,7 +115,7 @@ export default function TabLayout() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ResponsiveLayout
-        navItems={NAV_ITEMS}
+        navItems={navItems}
         activeItem={activeItem}
         onItemPress={handleItemPress}
         headerTitle="TripBuddy"

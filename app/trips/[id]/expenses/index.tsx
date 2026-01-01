@@ -1,23 +1,22 @@
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useTripCollaborators, useTripExpenses } from '@/hooks/use-trips';
+import { useTrip, useTripCollaborators, useTripExpenses } from '@/hooks/use-trips';
 import { Expense, User } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Linking,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 type ExpenseCategory = 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
@@ -27,18 +26,25 @@ const { width } = Dimensions.get('window');
 type ExpenseWithDetails = Expense & { paidByName: string; category: ExpenseCategory };
 
 const CATEGORY_CONFIG: Record<ExpenseCategory | string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
-  food: { icon: 'restaurant-outline', color: '#F97316', label: 'Food' },
-  transport: { icon: 'car-outline', color: Colors.primary, label: 'Transport' },
-  accommodation: { icon: 'bed-outline', color: Colors.secondary, label: 'Stay' },
-  activities: { icon: 'ticket-outline', color: '#8B5CF6', label: 'Activities' },
-  shopping: { icon: 'bag-outline', color: '#EC4899', label: 'Shopping' },
-  other: { icon: 'ellipsis-horizontal-outline', color: '#64748B', label: 'Other' },
+  food: { icon: 'restaurant', color: '#F97316', label: 'Food' },
+  transport: { icon: 'car', color: Colors.primary, label: 'Transport' },
+  accommodation: { icon: 'bed', color: Colors.secondary, label: 'Stay' },
+  activities: { icon: 'ticket', color: '#8B5CF6', label: 'Activities' },
+  shopping: { icon: 'bag', color: '#EC4899', label: 'Shopping' },
+  other: { icon: 'ellipsis-horizontal', color: '#64748B', label: 'Other' },
 };
 
 interface Balance {
   userId: string;
   name: string;
   balance: number;
+}
+
+interface CategorySpending {
+  category: string;
+  amount: number;
+  percentage: number;
+  config: typeof CATEGORY_CONFIG[string];
 }
 
 export default function ExpensesScreen() {
@@ -48,16 +54,23 @@ export default function ExpensesScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  // Fetch expenses and collaborators from Firestore
+  // Auth and user data
+  const { user } = useAuth();
+
+  // Fetch trip, expenses and collaborators from Firestore
+  const { trip, loading: tripLoading } = useTrip(id);
   const { expenses: rawExpenses, totalExpenses, loading: expensesLoading, error: expensesError } = useTripExpenses(id);
   const { collaborators, loading: collaboratorsLoading, error: collaboratorsError } = useTripCollaborators(id);
 
+  // Get currency - prefer trip currency, fall back to user's default currency
+  const currency = trip?.currency || user?.defaultCurrency || 'USD';
+
   const [activeTab, setActiveTab] = useState<'all' | 'balances'>('all');
   const [splitSummaryVisible, setSplitSummaryVisible] = useState(false);
-  const [settleModalVisible, setSettleModalVisible] = useState(false);
-  const [selectedSettlement, setSelectedSettlement] = useState<{ from: string; to: string; amount: number } | null>(null);
+  const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(true);
 
-  const loading = expensesLoading || collaboratorsLoading;
+  // Include tripLoading in the loading state
+  const loading = tripLoading || expensesLoading || collaboratorsLoading;
   const error = expensesError || collaboratorsError;
 
   // Map collaborators to a lookup for names
@@ -79,6 +92,27 @@ export default function ExpensesScreen() {
       category: (expense as any).category || 'other',
     }));
   }, [rawExpenses, collaboratorMap]);
+
+  // Calculate category spending breakdown
+  const categorySpending: CategorySpending[] = useMemo(() => {
+    if (expenses.length === 0 || totalExpenses === 0) return [];
+
+    const spendingByCategory: Record<string, number> = {};
+    
+    expenses.forEach((expense) => {
+      const cat = expense.category || 'other';
+      spendingByCategory[cat] = (spendingByCategory[cat] || 0) + expense.amount;
+    });
+
+    return Object.entries(spendingByCategory)
+      .map(([category, amount]) => ({
+        category,
+        amount,
+        percentage: (amount / totalExpenses) * 100,
+        config: CATEGORY_CONFIG[category] || CATEGORY_CONFIG.other,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [expenses, totalExpenses]);
 
   // Calculate balances from expenses
   const balances: Balance[] = useMemo(() => {
@@ -110,11 +144,14 @@ export default function ExpensesScreen() {
     return CATEGORY_CONFIG[category || 'other'] || CATEGORY_CONFIG.other;
   };
 
-  const formatCurrency = (amount: number, currency: string = 'EUR') => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency 
-    }).format(amount);
+  const formatCurrency = (amount: number) => {
+    const formattedAmount = new Intl.NumberFormat('en-IN', { 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Math.abs(amount));
+    
+    // Return with currency code
+    return `${amount < 0 ? '-' : ''}${currency} ${formattedAmount}`;
   };
 
   const formatDate = (date: Date) => {
@@ -128,42 +165,6 @@ export default function ExpensesScreen() {
     router.push(`/trips/${id}/expenses/add`);
   };
 
-  const handleSettleWithGooglePay = async () => {
-    if (!selectedSettlement) return;
-    
-    // Open Google Pay deep link (this would need to be customized based on the actual implementation)
-    const gpayUrl = `gpay://upi/pay?pa=recipient@upi&pn=${selectedSettlement.to}&am=${selectedSettlement.amount}&cu=EUR`;
-    
-    try {
-      const supported = await Linking.canOpenURL(gpayUrl);
-      if (supported) {
-        await Linking.openURL(gpayUrl);
-      } else {
-        Alert.alert(
-          'Google Pay Not Available',
-          'Google Pay is not installed on your device. Would you like to record this as settled manually?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Mark as Settled', 
-              onPress: () => {
-                Alert.alert('Settled', 'Payment marked as settled.');
-                setSettleModalVisible(false);
-              }
-            },
-          ]
-        );
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Could not open payment app.');
-    }
-  };
-
-  const openSettleModal = (from: string, to: string, amount: number) => {
-    setSelectedSettlement({ from, to, amount });
-    setSettleModalVisible(true);
-  };
-
   // Group expenses by date
   const groupedExpenses = expenses.reduce((acc, expense) => {
     const dateKey = formatDate(expense.createdAt);
@@ -172,42 +173,126 @@ export default function ExpensesScreen() {
     return acc;
   }, {} as Record<string, typeof expenses>);
 
+  // Render category spending breakdown
+  const renderCategoryBreakdown = () => {
+    if (categorySpending.length === 0) return null;
+
+    return (
+      <View style={[styles.categoryBreakdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity 
+          style={styles.categoryBreakdownHeader}
+          onPress={() => setShowCategoryBreakdown(!showCategoryBreakdown)}
+        >
+          <View style={styles.categoryBreakdownTitleRow}>
+            <Ionicons name="pie-chart" size={20} color={Colors.primary} />
+            <Text style={[styles.categoryBreakdownTitle, { color: colors.text }]}>
+              Spending by Category
+            </Text>
+          </View>
+          <Ionicons 
+            name={showCategoryBreakdown ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color={colors.textSecondary} 
+          />
+        </TouchableOpacity>
+
+        {showCategoryBreakdown && (
+          <>
+            {/* Visual Bar Chart */}
+            <View style={styles.categoryBarsContainer}>
+              {categorySpending.map((item) => (
+                <View key={item.category} style={styles.categoryBarRow}>
+                  <View style={styles.categoryBarLabel}>
+                    <View style={[styles.categoryBarIcon, { backgroundColor: item.config.color + '20' }]}>
+                      <Ionicons name={item.config.icon} size={16} color={item.config.color} />
+                    </View>
+                    <Text style={[styles.categoryBarName, { color: colors.text }]} numberOfLines={1}>
+                      {item.config.label}
+                    </Text>
+                  </View>
+                  <View style={styles.categoryBarWrapper}>
+                    <View style={[styles.categoryBarBackground, { backgroundColor: colors.backgroundSecondary }]}>
+                      <View 
+                        style={[
+                          styles.categoryBarFill, 
+                          { 
+                            backgroundColor: item.config.color,
+                            width: `${Math.max(item.percentage, 2)}%`,
+                          }
+                        ]} 
+                      />
+                    </View>
+                    <Text style={[styles.categoryBarPercent, { color: colors.textSecondary }]}>
+                      {item.percentage.toFixed(0)}%
+                    </Text>
+                  </View>
+                  <Text style={[styles.categoryBarAmount, { color: colors.text }]}>
+                    {formatCurrency(item.amount)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Category Pills Summary */}
+            <View style={styles.categoryPillsContainer}>
+              {categorySpending.slice(0, 4).map((item) => (
+                <View 
+                  key={item.category} 
+                  style={[styles.categoryPill, { backgroundColor: item.config.color + '15' }]}
+                >
+                  <Ionicons name={item.config.icon} size={14} color={item.config.color} />
+                  <Text style={[styles.categoryPillText, { color: item.config.color }]}>
+                    {item.config.label}: {formatCurrency(item.amount)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerPlaceholder} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Expenses</Text>
-        <TouchableOpacity
-          onPress={handleAddExpense}
-          style={[styles.addButton, { backgroundColor: Colors.primary }]}
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
       </View>
 
-      {/* Summary Card */}
-      <View style={[styles.summaryCard, { backgroundColor: Colors.primary }, Shadows.md]}>
-        <View style={styles.summaryHeader}>
-          <Text style={styles.summaryLabel}>Total Expenses</Text>
-          <View style={styles.summaryBadge}>
-            <Ionicons name="people" size={14} color={Colors.primary} />
-            <Text style={styles.summaryBadgeText}>{peopleCount} {peopleCount === 1 ? 'person' : 'people'}</Text>
+      {/* Summary Card - Only render when trip data is loaded */}
+      {tripLoading ? (
+        <View style={[styles.summaryCard, { backgroundColor: Colors.primary }, Shadows.md]}>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.summaryLabel}>Total Expenses</Text>
+          </View>
+          <ActivityIndicator size="small" color="#FFFFFF" style={{ marginVertical: Spacing.md }} />
+        </View>
+      ) : (
+        <View style={[styles.summaryCard, { backgroundColor: Colors.primary }, Shadows.md]}>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.summaryLabel}>Total Expenses</Text>
+            <View style={styles.summaryBadge}>
+              <Ionicons name="people" size={14} color={Colors.primary} />
+              <Text style={styles.summaryBadgeText}>{peopleCount} {peopleCount === 1 ? 'person' : 'people'}</Text>
+            </View>
+          </View>
+          <Text style={styles.summaryAmount}>{formatCurrency(totalExpenses)}</Text>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryStats}>
+            <View style={styles.summaryStat}>
+              <Text style={styles.summaryStatValue}>{expenses.length}</Text>
+              <Text style={styles.summaryStatLabel}>Transactions</Text>
+            </View>
+            <View style={styles.summaryStat}>
+              <Text style={styles.summaryStatValue}>{formatCurrency(totalExpenses / peopleCount)}</Text>
+              <Text style={styles.summaryStatLabel}>Per Person</Text>
+            </View>
           </View>
         </View>
-        <Text style={styles.summaryAmount}>{formatCurrency(totalExpenses)}</Text>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryStats}>
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryStatValue}>{expenses.length}</Text>
-            <Text style={styles.summaryStatLabel}>Transactions</Text>
-          </View>
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryStatValue}>{formatCurrency(totalExpenses / peopleCount)}</Text>
-            <Text style={styles.summaryStatLabel}>Per Person</Text>
-          </View>
-        </View>
-      </View>
+      )}
 
       {/* Tabs */}
       <View style={styles.tabs}>
@@ -290,34 +375,47 @@ export default function ExpensesScreen() {
               onAction={handleAddExpense}
             />
           ) : (
-            Object.entries(groupedExpenses).map(([date, dateExpenses]) => (
-              <View key={date} style={styles.dateGroup}>
-                <Text style={[styles.dateHeader, { color: colors.textSecondary }]}>{date}</Text>
-                {dateExpenses.map((expense) => {
-                  const config = getCategoryConfig((expense as any).category);
-                  return (
-                    <TouchableOpacity
-                      key={expense.id}
-                      style={[styles.expenseCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.expenseIcon, { backgroundColor: config.color + '15' }]}>
-                        <Ionicons name={config.icon} size={24} color={config.color} />
-                      </View>
-                      <View style={styles.expenseContent}>
-                        <Text style={[styles.expenseTitle, { color: colors.text }]}>{expense.title}</Text>
-                        <Text style={[styles.expensePaidBy, { color: colors.textSecondary }]}>
-                          Paid by {expense.paidByName}
+            <>
+              {/* Category Breakdown Visualization */}
+              {renderCategoryBreakdown()}
+
+              {/* Expenses List */}
+              {Object.entries(groupedExpenses).map(([date, dateExpenses]) => (
+                <View key={date} style={styles.dateGroup}>
+                  <Text style={[styles.dateHeader, { color: colors.textSecondary }]}>{date}</Text>
+                  {dateExpenses.map((expense) => {
+                    const config = getCategoryConfig(expense.category);
+                    return (
+                      <TouchableOpacity
+                        key={expense.id}
+                        style={[styles.expenseCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.expenseIcon, { backgroundColor: config.color + '15' }]}>
+                          <Ionicons name={config.icon} size={24} color={config.color} />
+                        </View>
+                        <View style={styles.expenseContent}>
+                          <Text style={[styles.expenseTitle, { color: colors.text }]}>{expense.title}</Text>
+                          <View style={styles.expenseMetaRow}>
+                            <View style={[styles.expenseCategoryBadge, { backgroundColor: config.color + '10' }]}>
+                              <Text style={[styles.expenseCategoryText, { color: config.color }]}>
+                                {config.label}
+                              </Text>
+                            </View>
+                            <Text style={[styles.expensePaidBy, { color: colors.textSecondary }]}>
+                              • {expense.paidByName}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.expenseAmount, { color: colors.text }]}>
+                          {formatCurrency(expense.amount)}
                         </Text>
-                      </View>
-                      <Text style={[styles.expenseAmount, { color: colors.text }]}>
-                        {formatCurrency(expense.amount, expense.currency)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </>
           )
         ) : (
           // Balances View
@@ -360,69 +458,6 @@ export default function ExpensesScreen() {
               </View>
             ))
             )}
-
-            {/* Settlement Suggestions */}
-            <View style={styles.settlementsSection}>
-              <Text style={[styles.settlementsTitle, { color: colors.text }]}>Suggested Settlements</Text>
-              <TouchableOpacity 
-                style={[styles.settlementCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => openSettleModal('Mike', 'John', 125)}
-              >
-                <View style={styles.settlementParties}>
-                  <View style={[styles.settlementAvatar, { backgroundColor: '#FEE2E2' }]}>
-                    <Text style={[styles.settlementAvatarText, { color: Colors.error }]}>M</Text>
-                  </View>
-                  <View style={styles.settlementArrow}>
-                    <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
-                    <Text style={[styles.settlementAmountSmall, { color: colors.text }]}>€125</Text>
-                  </View>
-                  <View style={[styles.settlementAvatar, { backgroundColor: '#D1FAE5' }]}>
-                    <Text style={[styles.settlementAvatarText, { color: Colors.secondary }]}>J</Text>
-                  </View>
-                </View>
-                <Text style={[styles.settlementText, { color: colors.textSecondary }]}>
-                  Mike pays John €125.00
-                </Text>
-                <View style={styles.settleButtonRow}>
-                  <TouchableOpacity 
-                    style={[styles.settleButton, { backgroundColor: '#4285F4' }]}
-                    onPress={() => openSettleModal('Mike', 'John', 125)}
-                  >
-                    <Ionicons name="wallet-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.settleButtonText}>Settle with GPay</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.settlementCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => openSettleModal('Sarah', 'John', 57.50)}
-              >
-                <View style={styles.settlementParties}>
-                  <View style={[styles.settlementAvatar, { backgroundColor: '#FEE2E2' }]}>
-                    <Text style={[styles.settlementAvatarText, { color: Colors.error }]}>S</Text>
-                  </View>
-                  <View style={styles.settlementArrow}>
-                    <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
-                    <Text style={[styles.settlementAmountSmall, { color: colors.text }]}>€57.50</Text>
-                  </View>
-                  <View style={[styles.settlementAvatar, { backgroundColor: '#D1FAE5' }]}>
-                    <Text style={[styles.settlementAvatarText, { color: Colors.secondary }]}>J</Text>
-                  </View>
-                </View>
-                <Text style={[styles.settlementText, { color: colors.textSecondary }]}>
-                  Sarah pays John €57.50
-                </Text>
-                <View style={styles.settleButtonRow}>
-                  <TouchableOpacity 
-                    style={[styles.settleButton, { backgroundColor: '#4285F4' }]}
-                    onPress={() => openSettleModal('Sarah', 'John', 57.50)}
-                  >
-                    <Ionicons name="wallet-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.settleButtonText}>Settle with GPay</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            </View>
           </View>
         )}
       </ScrollView>
@@ -455,86 +490,26 @@ export default function ExpensesScreen() {
                 <Text style={[styles.splitSummaryAmount, { color: colors.text }]}>{formatCurrency(totalExpenses / peopleCount)}</Text>
               </View>
 
-              <View style={styles.categoryBreakdown}>
-                <Text style={[styles.categoryBreakdownTitle, { color: colors.text }]}>By Category</Text>
-                {Object.entries(CATEGORY_CONFIG).map(([key, config]) => {
-                  const categoryTotal = expenses
-                    .filter(e => (e as any).category === key)
-                    .reduce((sum, e) => sum + e.amount, 0);
-                  if (categoryTotal === 0) return null;
-                  return (
-                    <View key={key} style={styles.categoryRow}>
-                      <View style={styles.categoryInfo}>
-                        <View style={[styles.categoryDot, { backgroundColor: config.color }]} />
-                        <Text style={[styles.categoryName, { color: colors.text }]}>{config.label}</Text>
+              <View style={styles.modalCategoryBreakdown}>
+                <Text style={[styles.modalCategoryBreakdownTitle, { color: colors.text }]}>By Category</Text>
+                {categorySpending.map((item) => (
+                  <View key={item.category} style={styles.modalCategoryRow}>
+                    <View style={styles.modalCategoryInfo}>
+                      <View style={[styles.modalCategoryIcon, { backgroundColor: item.config.color + '20' }]}>
+                        <Ionicons name={item.config.icon} size={18} color={item.config.color} />
                       </View>
-                      <Text style={[styles.categoryAmount, { color: colors.text }]}>{formatCurrency(categoryTotal)}</Text>
+                      <Text style={[styles.modalCategoryName, { color: colors.text }]}>{item.config.label}</Text>
                     </View>
-                  );
-                })}
+                    <View style={styles.modalCategoryAmountContainer}>
+                      <Text style={[styles.modalCategoryAmount, { color: colors.text }]}>{formatCurrency(item.amount)}</Text>
+                      <Text style={[styles.modalCategoryPercent, { color: colors.textSecondary }]}>
+                        {item.percentage.toFixed(0)}%
+                      </Text>
+                    </View>
+                  </View>
+                ))}
               </View>
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Settle with Google Pay Modal */}
-      <Modal
-        visible={settleModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setSettleModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Settle Payment</Text>
-              <TouchableOpacity onPress={() => setSettleModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedSettlement && (
-              <View style={styles.settleContent}>
-                <View style={styles.settleParties}>
-                  <View style={[styles.settleAvatar, { backgroundColor: '#FEE2E2' }]}>
-                    <Text style={[styles.settleAvatarText, { color: Colors.error }]}>{selectedSettlement.from.charAt(0)}</Text>
-                  </View>
-                  <View style={styles.settleArrowLarge}>
-                    <Ionicons name="arrow-forward" size={24} color={colors.textMuted} />
-                  </View>
-                  <View style={[styles.settleAvatar, { backgroundColor: '#D1FAE5' }]}>
-                    <Text style={[styles.settleAvatarText, { color: Colors.secondary }]}>{selectedSettlement.to.charAt(0)}</Text>
-                  </View>
-                </View>
-
-                <Text style={[styles.settleAmountLarge, { color: colors.text }]}>
-                  {formatCurrency(selectedSettlement.amount)}
-                </Text>
-                <Text style={[styles.settleDescription, { color: colors.textSecondary }]}>
-                  {selectedSettlement.from} pays {selectedSettlement.to}
-                </Text>
-
-                <TouchableOpacity
-                  style={[styles.googlePayButton]}
-                  onPress={handleSettleWithGooglePay}
-                >
-                  <Ionicons name="wallet" size={20} color="#FFFFFF" />
-                  <Text style={styles.googlePayButtonText}>Pay with Google Pay</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.markSettledButton, { borderColor: colors.border }]}
-                  onPress={() => {
-                    Alert.alert('Settled', 'Payment marked as settled.');
-                    setSettleModalVisible(false);
-                  }}
-                >
-                  <Ionicons name="checkmark-circle-outline" size={20} color={Colors.secondary} />
-                  <Text style={[styles.markSettledText, { color: Colors.secondary }]}>Mark as Settled</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         </View>
       </Modal>
@@ -554,14 +529,12 @@ export default function ExpensesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: Spacing.xxl,
+    paddingVertical: Spacing['2xl'],
   },
   loadingText: {
     marginTop: Spacing.md,
@@ -686,8 +659,105 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl + Spacing.xl,
+    paddingBottom: Spacing['3xl'] + Spacing.xl,
   },
+  // Category Breakdown Card Styles
+  categoryBreakdownCard: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+    overflow: 'hidden',
+  },
+  categoryBreakdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  categoryBreakdownTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  categoryBreakdownTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.semibold,
+  },
+  categoryBarsContainer: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  categoryBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  categoryBarLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 100,
+    gap: Spacing.xs,
+  },
+  categoryBarIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryBarName: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.medium,
+    flex: 1,
+  },
+  categoryBarWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  categoryBarBackground: {
+    flex: 1,
+    height: 8,
+    borderRadius: BorderRadius.full,
+    overflow: 'hidden',
+  },
+  categoryBarFill: {
+    height: '100%',
+    borderRadius: BorderRadius.full,
+  },
+  categoryBarPercent: {
+    fontSize: FontSizes.xs,
+    width: 32,
+    textAlign: 'right',
+  },
+  categoryBarAmount: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.semibold,
+    width: 80,
+    textAlign: 'right',
+  },
+  categoryPillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+    gap: Spacing.xs,
+  },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+  },
+  categoryPillText: {
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.medium,
+  },
+  // Expense Card Styles
   dateGroup: {
     marginBottom: Spacing.md,
   },
@@ -718,10 +788,24 @@ const styles = StyleSheet.create({
   expenseTitle: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.medium,
+    marginBottom: 4,
+  },
+  expenseMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  expenseCategoryBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
+  expenseCategoryText: {
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.medium,
   },
   expensePaidBy: {
     fontSize: FontSizes.sm,
-    marginTop: 2,
   },
   expenseAmount: {
     fontSize: FontSizes.md,
@@ -836,10 +920,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
+    borderTopLeftRadius: BorderRadius.xlarge,
+    borderTopRightRadius: BorderRadius.xlarge,
     padding: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
+    paddingBottom: Spacing['3xl'],
   },
   modalHeader: {
     flexDirection: 'row',
@@ -867,36 +951,45 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xxl,
     fontWeight: FontWeights.bold,
   },
-  categoryBreakdown: {
+  // Modal Category Breakdown Styles
+  modalCategoryBreakdown: {
     marginTop: Spacing.md,
   },
-  categoryBreakdownTitle: {
+  modalCategoryBreakdownTitle: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.semibold,
     marginBottom: Spacing.sm,
   },
-  categoryRow: {
+  modalCategoryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Spacing.sm,
   },
-  categoryInfo: {
+  modalCategoryInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  categoryDot: {
-    width: 12,
-    height: 12,
-    borderRadius: BorderRadius.full,
+  modalCategoryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  categoryName: {
+  modalCategoryName: {
     fontSize: FontSizes.md,
   },
-  categoryAmount: {
+  modalCategoryAmountContainer: {
+    alignItems: 'flex-end',
+  },
+  modalCategoryAmount: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.semibold,
+  },
+  modalCategoryPercent: {
+    fontSize: FontSizes.xs,
   },
   settleContent: {
     alignItems: 'center',
@@ -938,8 +1031,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     backgroundColor: '#4285F4',
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
-    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing['2xl'],
+    borderRadius: BorderRadius.large,
     width: '100%',
     marginBottom: Spacing.md,
   },
@@ -954,8 +1047,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.sm,
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
-    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing['2xl'],
+    borderRadius: BorderRadius.large,
     borderWidth: 1,
     width: '100%',
   },

@@ -1,6 +1,7 @@
-import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
+import { BorderRadius, Colors, ComponentSizes, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef } from 'react';
 import {
@@ -21,7 +22,7 @@ interface BottomNavigationProps {
   showLabels?: boolean;
 }
 
-const TAB_HEIGHT = 65;
+const TAB_HEIGHT = ComponentSizes.tabBarHeight;
 const ANIMATION_DURATION = 150;
 
 export function BottomNavigation({
@@ -43,18 +44,48 @@ export function BottomNavigation({
     onItemPress(key);
   };
 
+  // Use blur on native, fallback to semi-transparent on web
+  const blurIntensity = isDark ? 80 : 60;
+  const blurTint = isDark ? 'dark' : 'light';
+
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
           paddingBottom: insets.bottom > 0 ? insets.bottom : Spacing.sm,
         },
-        Shadows.lg,
       ]}
     >
+      {/* Glass effect background */}
+      {Platform.OS !== 'web' ? (
+        <BlurView
+          intensity={blurIntensity}
+          tint={blurTint}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: isDark 
+                ? 'rgba(15, 23, 42, 0.85)' 
+                : 'rgba(255, 255, 255, 0.85)',
+              backdropFilter: 'blur(20px)',
+            },
+          ]}
+        />
+      )}
+      
+      {/* Subtle top border */}
+      <View 
+        style={[
+          styles.topBorder, 
+          { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
+        ]} 
+      />
+
       <View style={styles.tabsContainer}>
         {items.map((item) => (
           <TabItem
@@ -126,7 +157,7 @@ function TabItem({ item, isActive, onPress, colors, showLabel }: TabItemProps) {
         <View style={styles.iconWrapper}>
           <Ionicons
             name={iconName}
-            size={24}
+            size={ComponentSizes.iconLarge}
             color={isActive ? Colors.primary : colors.textSecondary}
           />
           {item.badge && item.badge > 0 && (
@@ -168,8 +199,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopWidth: 1,
     paddingTop: Spacing.sm,
+    overflow: 'hidden',
+  },
+  topBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
   },
   tabsContainer: {
     flexDirection: 'row',

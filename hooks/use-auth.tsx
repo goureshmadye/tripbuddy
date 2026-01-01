@@ -4,6 +4,7 @@ import {
     checkOnboardingComplete,
     checkWalkthroughComplete,
     getAuthErrorMessage,
+    resetOnboardingState,
     resetPassword as resetPasswordService,
     setGuestMode as setGuestModeService,
     setOnboardingComplete as setOnboardingCompleteService,
@@ -52,6 +53,7 @@ interface AuthContextType {
   uploadProfilePhoto: (uri: string) => Promise<string>;
   completeOnboarding: () => Promise<void>;
   completeWalkthrough: () => Promise<void>;
+  resetWalkthrough: () => Promise<void>;
   enableGuestMode: () => Promise<void>;
   disableGuestMode: () => Promise<void>;
 }
@@ -127,7 +129,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
           },
           (error) => {
-            console.error("Error listening to user document:", error);
+            // Only log if it's not a permission error (which is expected when signing out)
+            if (error.code !== 'permission-denied') {
+              console.error("Error listening to user document:", error);
+            }
             setLoading(false);
           }
         );
@@ -247,6 +252,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsWalkthroughComplete(true);
   };
 
+  const resetWalkthrough = async () => {
+    await resetOnboardingState();
+    setIsWalkthroughComplete(false);
+    setIsOnboardingComplete(false);
+    setIsGuestMode(false);
+  };
+
   const enableGuestMode = async () => {
     await setGuestModeService(true);
     setIsGuestMode(true);
@@ -277,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         uploadProfilePhoto,
         completeOnboarding,
         completeWalkthrough,
+        resetWalkthrough,
         enableGuestMode,
         disableGuestMode,
       }}

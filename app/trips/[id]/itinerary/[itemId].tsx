@@ -2,20 +2,36 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useItineraryItem } from '@/hooks/use-trips';
+import { deleteItineraryItem, updateItineraryItem } from '@/services/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
     SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
 } from 'react-native';
+
+interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  uri: string;
+  size?: number;
+}
 
 interface Comment {
   id: string;
@@ -44,6 +60,12 @@ export default function ItineraryItemDetailScreen() {
   const { item, loading, error } = useItineraryItem(itemId);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const config = item ? (CATEGORY_CONFIG[item.category || 'other'] || CATEGORY_CONFIG.other) : CATEGORY_CONFIG.other;
 
@@ -65,8 +87,34 @@ export default function ItineraryItemDetailScreen() {
   };
 
   const handleEdit = () => {
-    // Navigate to edit screen
-    Alert.alert('Edit', 'Edit functionality coming soon!');
+    if (item) {
+      setEditTitle(item.title || '');
+      setEditDescription(item.description || '');
+      setEditLocation(item.location || '');
+      setIsEditModalVisible(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!itemId || !editTitle.trim()) {
+      Alert.alert('Error', 'Title is required');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await updateItineraryItem(itemId, {
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        location: editLocation.trim() || null,
+      });
+      setIsEditModalVisible(false);
+    } catch (err) {
+      console.error('Error updating item:', err);
+      Alert.alert('Error', 'Failed to update activity');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = () => {
@@ -75,9 +123,58 @@ export default function ItineraryItemDetailScreen() {
       'Are you sure you want to delete this activity?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => router.back() },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              if (itemId) {
+                await deleteItineraryItem(itemId);
+              }
+              router.back();
+            } catch (err) {
+              console.error('Error deleting item:', err);
+              Alert.alert('Error', 'Failed to delete activity');
+            }
+          } 
+        },
       ]
     );
+  };
+
+  const handleAddAttachment = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const newAttachment: Attachment = {
+          id: Date.now().toString(),
+          name: asset.name,
+          type: asset.mimeType || 'application/octet-stream',
+          uri: asset.uri,
+          size: asset.size,
+        };
+        setAttachments([...attachments, newAttachment]);
+      }
+    } catch (err) {
+      console.error('Error picking document:', err);
+      Alert.alert('Error', 'Failed to pick document');
+    }
+  };
+
+  const handleRemoveAttachment = (attachmentId: string) => {
+    setAttachments(attachments.filter(a => a.id !== attachmentId));
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleAddComment = () => {
@@ -97,9 +194,28 @@ export default function ItineraryItemDetailScreen() {
   };
 
   const handleOpenMap = () => {
-    if (item?.latitude && item?.longitude) {
-      // Open in maps app
-      Alert.alert('Map', 'Opening in Maps app...');
+    if (item?.latitude != null && item?.longitude != null) {
+      // Open in native maps app
+      const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
+      const latLng = `${item.latitude},${item.longitude}`;
+      const label = encodeURIComponent(item.title || item.location || 'Location');
+      const url = Platform.select({
+        ios: `${scheme}${label}@${latLng}`,
+        android: `${scheme}${latLng}(${label})`,
+        default: `https://www.google.com/maps/search/?api=1&query=${latLng}`,
+      });
+      Linking.openURL(url as string);
+    } else if (item?.location) {
+      // Open location search in maps
+      const query = encodeURIComponent(item.location);
+      const url = Platform.select({
+        ios: `maps:0,0?q=${query}`,
+        android: `geo:0,0?q=${query}`,
+        default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+      });
+      Linking.openURL(url as string);
+    } else {
+      Alert.alert('No Location', 'This activity does not have a location set.');
     }
   };
 
@@ -234,9 +350,42 @@ export default function ItineraryItemDetailScreen() {
 
         {/* Attachments */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Attachments</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Attachments ({attachments.length})
+          </Text>
+          {attachments.map((attachment) => (
+            <View
+              key={attachment.id}
+              style={[styles.attachmentCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <View style={[styles.attachmentIcon, { backgroundColor: Colors.primary + '15' }]}>
+                <Ionicons 
+                  name={attachment.type.includes('image') ? 'image-outline' : 'document-outline'} 
+                  size={20} 
+                  color={Colors.primary} 
+                />
+              </View>
+              <View style={styles.attachmentContent}>
+                <Text style={[styles.attachmentName, { color: colors.text }]} numberOfLines={1}>
+                  {attachment.name}
+                </Text>
+                {attachment.size && (
+                  <Text style={[styles.attachmentSize, { color: colors.textMuted }]}>
+                    {formatFileSize(attachment.size)}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity 
+                onPress={() => handleRemoveAttachment(attachment.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={22} color={Colors.error} />
+              </TouchableOpacity>
+            </View>
+          ))}
           <TouchableOpacity
             style={[styles.attachButton, { borderColor: colors.border }]}
+            onPress={handleAddAttachment}
           >
             <Ionicons name="add-outline" size={24} color={colors.textSecondary} />
             <Text style={[styles.attachText, { color: colors.textSecondary }]}>Add attachment</Text>
@@ -277,23 +426,94 @@ export default function ItineraryItemDetailScreen() {
       </ScrollView>
 
       {/* Comment Input */}
-      <View style={[styles.commentInputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-        <TextInput
-          style={[styles.commentInput, { backgroundColor: colors.inputBackground, color: colors.text }]}
-          placeholder="Add a comment..."
-          placeholderTextColor={colors.placeholder}
-          value={newComment}
-          onChangeText={setNewComment}
-          multiline
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: Colors.primary }]}
-          onPress={handleAddComment}
-          disabled={!newComment.trim()}
-        >
-          <Ionicons name="send" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <View style={[styles.commentInputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <TextInput
+            style={[styles.commentInput, { backgroundColor: colors.inputBackground, color: colors.text }]}
+            placeholder="Add a comment..."
+            placeholderTextColor={colors.placeholder}
+            value={newComment}
+            onChangeText={setNewComment}
+            multiline
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: Colors.primary }]}
+            onPress={handleAddComment}
+            disabled={!newComment.trim()}
+          >
+            <Ionicons name="send" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
+                <Text style={[styles.modalCancel, { color: Colors.primary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Activity</Text>
+              <TouchableOpacity onPress={handleSaveEdit} disabled={isSaving}>
+                <Text style={[styles.modalSave, { color: isSaving ? colors.textMuted : Colors.primary }]}>
+                  {isSaving ? 'Saving...' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent}>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Title *</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }]}
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  placeholder="Activity title"
+                  placeholderTextColor={colors.placeholder}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Location</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }]}
+                  value={editLocation}
+                  onChangeText={setEditLocation}
+                  placeholder="Location or address"
+                  placeholderTextColor={colors.placeholder}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Notes</Text>
+                <TextInput
+                  style={[
+                    styles.modalInput, 
+                    styles.modalTextArea,
+                    { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }
+                  ]}
+                  value={editDescription}
+                  onChangeText={setEditDescription}
+                  placeholder="Add notes or description"
+                  placeholderTextColor={colors.placeholder}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -301,8 +521,6 @@ export default function ItineraryItemDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   header: {
     flexDirection: 'row',
@@ -464,6 +682,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     padding: Spacing.md,
+    paddingBottom: Spacing.lg,
     borderTopWidth: 1,
     gap: Spacing.sm,
   },
@@ -494,5 +713,82 @@ const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
     paddingHorizontal: Spacing.xl,
+  },
+  // Attachment styles
+  attachmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  attachmentIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachmentContent: {
+    flex: 1,
+  },
+  attachmentName: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.medium,
+  },
+  attachmentSize: {
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  modalTitle: {
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.semibold,
+  },
+  modalCancel: {
+    fontSize: FontSizes.md,
+  },
+  modalSave: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.semibold,
+  },
+  modalContent: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+  },
+  inputGroup: {
+    gap: Spacing.xs,
+  },
+  inputLabel: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.medium,
+  },
+  modalInput: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    fontSize: FontSizes.md,
+  },
+  modalTextArea: {
+    minHeight: 100,
+    paddingTop: Spacing.sm,
   },
 });

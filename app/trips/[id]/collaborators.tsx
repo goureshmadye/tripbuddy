@@ -3,9 +3,24 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useTrip, useTripCollaborators } from '@/hooks/use-trips';
-import { CollaboratorRole, TripCollaborator } from '@/types/database';
+import { useSubscription, useTripUsage } from '@/hooks/use-subscription';
+import { useTrip, useTripCollaborators, useTripInvitations } from '@/hooks/use-trips';
+import {
+    cancelInvitation,
+    createInvitation,
+    getUserByEmail,
+    removeCollaborator,
+    resendInvitation,
+    updateCollaboratorRole,
+} from '@/services/firestore';
+import {
+    notifyCollaboratorRemoved,
+    notifyTripInvitation
+} from '@/services/notifications';
+import { CollaboratorRole, TripCollaborator, TripInvitation } from '@/types/database';
+import { validateEmail } from '@/utils/validation';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -23,10 +38,10 @@ import {
 
 type CollaboratorWithProfile = TripCollaborator & { name: string; email: string };
 
-const ROLE_CONFIG: Record<CollaboratorRole, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  owner: { label: 'Owner', color: Colors.accent, icon: 'star' },
-  editor: { label: 'Can Edit', color: Colors.primary, icon: 'pencil' },
-  viewer: { label: 'View Only', color: Colors.secondary, icon: 'eye' },
+const ROLE_CONFIG: Record<CollaboratorRole, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap; description: string }> = {
+  owner: { label: 'Owner', color: Colors.accent, icon: 'star', description: 'Full control over the trip' },
+  editor: { label: 'Can Edit', color: Colors.primary, icon: 'pencil', description: 'Can add and modify content' },
+  viewer: { label: 'View Only', color: Colors.secondary, icon: 'eye', description: 'Can only view content' },
 };
 
 export default function CollaboratorsScreen() {
@@ -39,10 +54,19 @@ export default function CollaboratorsScreen() {
   const { user: currentUser } = useAuth();
   const { trip, loading: tripLoading } = useTrip(id);
   const { collaborators: rawCollaborators, loading: collabLoading, error } = useTripCollaborators(id);
+  const { pendingInvitations, loading: invitationsLoading } = useTripInvitations(id);
+  
+  // Subscription and usage limits
+  const { limits } = useSubscription();
+  const { usage, collaboratorAccess, refresh: refreshUsage } = useTripUsage(id || '');
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [showInvite, setShowInvite] = useState(false);
   const [selectedRole, setSelectedRole] = useState<CollaboratorRole>('editor');
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
 
   const loading = tripLoading || collabLoading;
 
@@ -82,55 +106,248 @@ export default function CollaboratorsScreen() {
 
   const isCurrentUserOwner = currentUser?.id === trip?.creatorId;
 
-  const inviteCode = 'TRIP-ABC123';
+  // Get the latest pending invitation code for sharing
+  const latestInviteCode = pendingInvitations.length > 0 ? pendingInvitations[0].inviteCode : null;
 
-  const handleShareLink = async () => {
+  const handleShareLink = async (inviteCode: string) => {
     try {
       await Share.share({
-        message: `Join my trip on TripBuddy! Use code: ${inviteCode}\n\nhttps://tripbuddy.app/join/${inviteCode}`,
+        message: `Join my trip "${trip?.title}" on TripBuddy! Use code: ${inviteCode}\n\nhttps://tripbuddy.app/join/${inviteCode}`,
       });
     } catch (error) {
       console.error('Share error:', error);
     }
   };
 
-  const handleCopyCode = () => {
-    // In a real app, copy to clipboard
-    Alert.alert('Copied!', 'Invite code copied to clipboard');
+  const handleCopyCode = async (code: string) => {
+    try {
+      await Clipboard.setStringAsync(code);
+      Alert.alert('Copied!', 'Invite code copied to clipboard');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to copy code');
+    }
   };
 
-  const handleSendInvite = () => {
-    if (!inviteEmail.trim()) return;
+  const handleSendInvite = async () => {
+    // Check collaborator limit before inviting
+    if (!collaboratorAccess.allowed) {
+      setShowUpgradePrompt(true);
+      setShowInvite(false);
+      return;
+    }
+
+    const email = inviteEmail.trim().toLowerCase();
     
-    Alert.alert('Invite Sent', `Invitation sent to ${inviteEmail}`);
-    setInviteEmail('');
-    setShowInvite(false);
+    // Validate email
+    if (!email) {
+      setInviteError('Please enter an email address');
+      return;
+    }
+    
+    if (!validateEmail(email)) {
+      setInviteError('Please enter a valid email address');
+      return;
+    }
+
+    // Check if inviting self
+    if (email === currentUser?.email?.toLowerCase()) {
+      setInviteError("You can't invite yourself");
+      return;
+    }
+
+    // Check if already a collaborator
+    const isAlreadyMember = collaborators.some(
+      c => c.email.toLowerCase() === email
+    );
+    if (isAlreadyMember) {
+      setInviteError('This person is already a member of this trip');
+      return;
+    }
+
+    if (!id || !currentUser?.id) {
+      Alert.alert('Error', 'Unable to send invitation. Please try again.');
+      return;
+    }
+
+    setSendingInvite(true);
+    setInviteError(null);
+
+    try {
+      const { id: invitationId, inviteCode } = await createInvitation({
+        tripId: id,
+        invitedEmail: email,
+        invitedBy: currentUser.id,
+        role: selectedRole,
+      });
+
+      // If the invited user exists, send them a notification
+      const invitedUser = await getUserByEmail(email);
+      if (invitedUser) {
+        notifyTripInvitation(
+          invitedUser.id,
+          id,
+          trip?.title || 'Trip',
+          currentUser.name,
+          currentUser.id,
+          invitationId
+        ).catch(console.error);
+      }
+
+      // Refresh usage counts
+      await refreshUsage();
+
+      Alert.alert(
+        'Invitation Sent!',
+        `An invitation has been sent to ${email}. Share this code with them: ${inviteCode}`,
+        [
+          { text: 'Copy Code', onPress: () => handleCopyCode(inviteCode) },
+          { text: 'Done' },
+        ]
+      );
+      
+      setInviteEmail('');
+      setShowInvite(false);
+    } catch (error: any) {
+      setInviteError(error.message || 'Failed to send invitation');
+    } finally {
+      setSendingInvite(false);
+    }
   };
 
-  const handleRemoveCollaborator = (collaboratorId: string) => {
+  const handleRemoveCollaborator = (collaborator: CollaboratorWithProfile) => {
+    if (collaborator.role === 'owner') return;
+    
     Alert.alert(
-      'Remove Collaborator',
-      'Are you sure you want to remove this person from the trip?',
+      'Remove Member',
+      `Are you sure you want to remove ${collaborator.name} from this trip?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive' },
+        { 
+          text: 'Remove', 
+          style: 'destructive',
+          onPress: async () => {
+            setProcessingAction(collaborator.id);
+            try {
+              await removeCollaborator(collaborator.id);
+              
+              // Notify the removed user
+              if (currentUser) {
+                notifyCollaboratorRemoved(
+                  collaborator.userId,
+                  trip?.title || 'Trip',
+                  currentUser.name,
+                  currentUser.id
+                ).catch(console.error);
+              }
+              
+              Alert.alert('Removed', `${collaborator.name} has been removed from the trip.`);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to remove collaborator');
+            } finally {
+              setProcessingAction(null);
+            }
+          }
+        },
       ]
     );
   };
 
-  const handleChangeRole = (collaboratorId: string, currentRole: CollaboratorRole) => {
+  const handleChangeRole = (collaborator: CollaboratorWithProfile) => {
+    if (collaborator.role === 'owner' || !isCurrentUserOwner) return;
+
     const roles: CollaboratorRole[] = ['viewer', 'editor'];
+    
     Alert.alert(
       'Change Role',
-      'Select a new role for this collaborator',
+      `Select a new role for ${collaborator.name}`,
       [
         ...roles.map(role => ({
-          text: ROLE_CONFIG[role].label,
-          onPress: () => {},
+          text: `${ROLE_CONFIG[role].label} - ${ROLE_CONFIG[role].description}`,
+          onPress: async () => {
+            if (role === collaborator.role) return;
+            
+            setProcessingAction(collaborator.id);
+            try {
+              await updateCollaboratorRole(collaborator.id, role);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to update role');
+            } finally {
+              setProcessingAction(null);
+            }
+          },
         })),
         { text: 'Cancel', style: 'cancel' },
       ]
     );
+  };
+
+  const handleCancelInvitation = (invitation: TripInvitation) => {
+    Alert.alert(
+      'Cancel Invitation',
+      `Are you sure you want to cancel the invitation to ${invitation.invitedEmail}?`,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Cancel Invite',
+          style: 'destructive',
+          onPress: async () => {
+            setProcessingAction(invitation.id);
+            try {
+              await cancelInvitation(invitation.id);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to cancel invitation');
+            } finally {
+              setProcessingAction(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleResendInvitation = async (invitation: TripInvitation) => {
+    setProcessingAction(invitation.id);
+    try {
+      const newCode = await resendInvitation(invitation.id);
+      Alert.alert(
+        'Invitation Resent',
+        `A new invitation code has been generated: ${newCode}`,
+        [
+          { text: 'Copy Code', onPress: () => handleCopyCode(newCode) },
+          { text: 'Done' },
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to resend invitation');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const formatTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    return `${diffDays}d ago`;
+  };
+
+  const getExpiryText = (expiresAt: Date): { text: string; isExpiringSoon: boolean } => {
+    const now = new Date();
+    const diffMs = expiresAt.getTime() - now.getTime();
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMs <= 0) return { text: 'Expired', isExpiringSoon: true };
+    if (diffHours < 24) return { text: `Expires in ${diffHours}h`, isExpiringSoon: true };
+    if (diffDays === 1) return { text: 'Expires tomorrow', isExpiringSoon: false };
+    return { text: `Expires in ${diffDays} days`, isExpiringSoon: false };
   };
 
   return (
@@ -164,35 +381,49 @@ export default function CollaboratorsScreen() {
           />
         ) : (
           <>
-        {/* Quick Share */}
-        <View style={[styles.shareCard, { backgroundColor: Colors.primary + '10', borderColor: Colors.primary + '30' }]}>
-          <View style={styles.shareHeader}>
-            <View style={[styles.shareIcon, { backgroundColor: Colors.primary }]}>
-              <Ionicons name="link" size={24} color="#FFFFFF" />
+        {/* Collaborator Limit Warning */}
+        {!collaboratorAccess.allowed && (
+          <LimitWarning
+            type="collaborator"
+            current={usage?.collaboratorCount || 0}
+            limit={limits.maxCollaboratorsPerTrip}
+            onUpgrade={() => setShowUpgradePrompt(true)}
+          />
+        )}
+
+        {/* Quick Share - Only show if there's an invite code or owner can create one */}
+        {isCurrentUserOwner && (
+          <View style={[styles.shareCard, { backgroundColor: Colors.primary + '10', borderColor: Colors.primary + '30' }]}>
+            <View style={styles.shareHeader}>
+              <View style={[styles.shareIcon, { backgroundColor: Colors.primary }]}>
+                <Ionicons name="link" size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.shareContent}>
+                <Text style={[styles.shareTitle, { color: colors.text }]}>Invite People</Text>
+                <Text style={[styles.shareSubtitle, { color: colors.textSecondary }]}>
+                  Send email invitations or share a code
+                </Text>
+              </View>
             </View>
-            <View style={styles.shareContent}>
-              <Text style={[styles.shareTitle, { color: colors.text }]}>Share Invite Link</Text>
-              <Text style={[styles.shareSubtitle, { color: colors.textSecondary }]}>
-                Anyone with the link can join
-              </Text>
-            </View>
+            {latestInviteCode && (
+              <View style={styles.shareActions}>
+                <TouchableOpacity
+                  style={[styles.codeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => handleCopyCode(latestInviteCode)}
+                >
+                  <Text style={[styles.codeText, { color: colors.text }]}>{latestInviteCode}</Text>
+                  <Ionicons name="copy-outline" size={18} color={Colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.shareButton, { backgroundColor: Colors.primary }]}
+                  onPress={() => handleShareLink(latestInviteCode)}
+                >
+                  <Ionicons name="share-outline" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-          <View style={styles.shareActions}>
-            <TouchableOpacity
-              style={[styles.codeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={handleCopyCode}
-            >
-              <Text style={[styles.codeText, { color: colors.text }]}>{inviteCode}</Text>
-              <Ionicons name="copy-outline" size={18} color={Colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.shareButton, { backgroundColor: Colors.primary }]}
-              onPress={handleShareLink}
-            >
-              <Ionicons name="share-outline" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
+        )}
 
         {/* Invite by Email */}
         {showInvite && (
@@ -200,15 +431,30 @@ export default function CollaboratorsScreen() {
             <Text style={[styles.inviteTitle, { color: colors.text }]}>Invite by Email</Text>
             <View style={styles.inviteInput}>
               <TextInput
-                style={[styles.emailInput, { backgroundColor: colors.inputBackground, color: colors.text }]}
+                style={[
+                  styles.emailInput, 
+                  { 
+                    backgroundColor: colors.inputBackground, 
+                    color: colors.text,
+                    borderColor: inviteError ? Colors.error : 'transparent',
+                    borderWidth: inviteError ? 1 : 0,
+                  }
+                ]}
                 placeholder="Enter email address"
                 placeholderTextColor={colors.placeholder}
                 value={inviteEmail}
-                onChangeText={setInviteEmail}
+                onChangeText={(text) => {
+                  setInviteEmail(text);
+                  if (inviteError) setInviteError(null);
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!sendingInvite}
               />
             </View>
+            {inviteError && (
+              <Text style={styles.errorText}>{inviteError}</Text>
+            )}
             
             {/* Role Selection */}
             <Text style={[styles.roleLabel, { color: colors.textSecondary }]}>Permission Level</Text>
@@ -224,16 +470,22 @@ export default function CollaboratorsScreen() {
                     },
                   ]}
                   onPress={() => setSelectedRole(role)}
+                  disabled={sendingInvite}
                 >
                   <Ionicons 
                     name={ROLE_CONFIG[role].icon} 
                     size={18} 
                     color={selectedRole === role ? ROLE_CONFIG[role].color : colors.textSecondary} 
                   />
-                  <Text style={[
-                    styles.roleOptionText,
-                    { color: selectedRole === role ? ROLE_CONFIG[role].color : colors.text },
-                  ]}>{ROLE_CONFIG[role].label}</Text>
+                  <View>
+                    <Text style={[
+                      styles.roleOptionText,
+                      { color: selectedRole === role ? ROLE_CONFIG[role].color : colors.text },
+                    ]}>{ROLE_CONFIG[role].label}</Text>
+                    <Text style={[styles.roleDescription, { color: colors.textSecondary }]}>
+                      {ROLE_CONFIG[role].description}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -241,15 +493,21 @@ export default function CollaboratorsScreen() {
             <View style={styles.inviteActions}>
               <Button
                 title="Cancel"
-                onPress={() => setShowInvite(false)}
+                onPress={() => {
+                  setShowInvite(false);
+                  setInviteEmail('');
+                  setInviteError(null);
+                }}
                 variant="outline"
                 size="sm"
+                disabled={sendingInvite}
               />
               <Button
-                title="Send Invite"
+                title={sendingInvite ? "Sending..." : "Send Invite"}
                 onPress={handleSendInvite}
                 size="sm"
-                icon={<Ionicons name="send" size={16} color="#FFFFFF" />}
+                loading={sendingInvite}
+                icon={!sendingInvite ? <Ionicons name="send" size={16} color="#FFFFFF" /> : undefined}
               />
             </View>
           </View>
@@ -262,14 +520,27 @@ export default function CollaboratorsScreen() {
           </Text>
           {collaborators.map((collaborator) => {
             const roleConfig = ROLE_CONFIG[collaborator.role];
+            const isProcessing = processingAction === collaborator.id;
             return (
               <View
                 key={collaborator.id}
-                style={[styles.collaboratorCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                style={[
+                  styles.collaboratorCard, 
+                  { 
+                    backgroundColor: colors.card, 
+                    borderColor: colors.border,
+                    opacity: isProcessing ? 0.6 : 1,
+                  }
+                ]}
               >
+                {isProcessing && (
+                  <View style={styles.processingOverlay}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  </View>
+                )}
                 <View style={[styles.avatar, { backgroundColor: Colors.primary + '20' }]}>
                   <Text style={[styles.avatarText, { color: Colors.primary }]}>
-                    {collaborator.name.charAt(0)}
+                    {collaborator.name.charAt(0).toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.collaboratorInfo}>
@@ -284,21 +555,22 @@ export default function CollaboratorsScreen() {
                 <View style={styles.collaboratorActions}>
                   <TouchableOpacity
                     style={[styles.roleBadge, { backgroundColor: roleConfig.color + '15' }]}
-                    onPress={() => collaborator.role !== 'owner' && handleChangeRole(collaborator.id, collaborator.role)}
-                    disabled={collaborator.role === 'owner'}
+                    onPress={() => handleChangeRole(collaborator)}
+                    disabled={collaborator.role === 'owner' || !isCurrentUserOwner || isProcessing}
                   >
                     <Ionicons name={roleConfig.icon} size={14} color={roleConfig.color} />
                     <Text style={[styles.roleBadgeText, { color: roleConfig.color }]}>
                       {roleConfig.label}
                     </Text>
-                    {collaborator.role !== 'owner' && (
+                    {collaborator.role !== 'owner' && isCurrentUserOwner && (
                       <Ionicons name="chevron-down" size={12} color={roleConfig.color} />
                     )}
                   </TouchableOpacity>
-                  {collaborator.role !== 'owner' && (
+                  {collaborator.role !== 'owner' && isCurrentUserOwner && (
                     <TouchableOpacity
-                      onPress={() => handleRemoveCollaborator(collaborator.id)}
+                      onPress={() => handleRemoveCollaborator(collaborator)}
                       style={styles.removeButton}
+                      disabled={isProcessing}
                     >
                       <Ionicons name="close-circle" size={24} color={Colors.error} />
                     </TouchableOpacity>
@@ -310,18 +582,115 @@ export default function CollaboratorsScreen() {
         </View>
 
         {/* Pending Invites */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Pending Invites</Text>
-          <View style={[styles.emptyPending, { borderColor: colors.border }]}>
-            <Ionicons name="mail-outline" size={32} color={colors.textMuted} />
-            <Text style={[styles.emptyPendingText, { color: colors.textSecondary }]}>
-              No pending invites
+        {isCurrentUserOwner && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Pending Invites {pendingInvitations.length > 0 && `(${pendingInvitations.length})`}
             </Text>
+            {invitationsLoading ? (
+              <View style={styles.loadingSmall}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : pendingInvitations.length === 0 ? (
+              <View style={[styles.emptyPending, { borderColor: colors.border }]}>
+                <Ionicons name="mail-outline" size={32} color={colors.textMuted} />
+                <Text style={[styles.emptyPendingText, { color: colors.textSecondary }]}>
+                  No pending invites
+                </Text>
+                <Text style={[styles.emptyPendingHint, { color: colors.textMuted }]}>
+                  Tap the + button to invite someone
+                </Text>
+              </View>
+            ) : (
+              pendingInvitations.map((invitation) => {
+                const roleConfig = ROLE_CONFIG[invitation.role];
+                const expiryInfo = getExpiryText(invitation.expiresAt);
+                const isProcessing = processingAction === invitation.id;
+                
+                return (
+                  <View
+                    key={invitation.id}
+                    style={[
+                      styles.invitationCard, 
+                      { 
+                        backgroundColor: colors.card, 
+                        borderColor: colors.border,
+                        opacity: isProcessing ? 0.6 : 1,
+                      }
+                    ]}
+                  >
+                    {isProcessing && (
+                      <View style={styles.processingOverlay}>
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      </View>
+                    )}
+                    <View style={[styles.avatar, { backgroundColor: Colors.info + '20' }]}>
+                      <Ionicons name="mail" size={20} color={Colors.info} />
+                    </View>
+                    <View style={styles.invitationInfo}>
+                      <Text style={[styles.invitationEmail, { color: colors.text }]}>
+                        {invitation.invitedEmail}
+                      </Text>
+                      <View style={styles.invitationMeta}>
+                        <View style={[styles.roleBadgeSmall, { backgroundColor: roleConfig.color + '15' }]}>
+                          <Text style={[styles.roleBadgeTextSmall, { color: roleConfig.color }]}>
+                            {roleConfig.label}
+                          </Text>
+                        </View>
+                        <Text style={[
+                          styles.expiryText, 
+                          { color: expiryInfo.isExpiringSoon ? Colors.warning : colors.textSecondary }
+                        ]}>
+                          {expiryInfo.text}
+                        </Text>
+                      </View>
+                      <Text style={[styles.invitedTimeText, { color: colors.textMuted }]}>
+                        Invited {formatTimeAgo(invitation.createdAt)}
+                      </Text>
+                    </View>
+                    <View style={styles.invitationActions}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: Colors.primary + '15' }]}
+                        onPress={() => handleResendInvitation(invitation)}
+                        disabled={isProcessing}
+                      >
+                        <Ionicons name="refresh" size={18} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: colors.background }]}
+                        onPress={() => handleShareLink(invitation.inviteCode)}
+                        disabled={isProcessing}
+                      >
+                        <Ionicons name="share-outline" size={18} color={colors.text} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: Colors.error + '15' }]}
+                        onPress={() => handleCancelInvitation(invitation)}
+                        disabled={isProcessing}
+                      >
+                        <Ionicons name="close" size={18} color={Colors.error} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </View>
-        </View>
+        )}
           </>
         )}
       </ScrollView>
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        feature="Collaborator Limit Reached"
+        message={`You've used ${usage?.collaboratorCount || 0} of ${limits.maxCollaboratorsPerTrip} collaborators for this trip. Upgrade to Pro to add unlimited collaborators.`}
+        currentUsage={usage?.collaboratorCount}
+        limit={limits.maxCollaboratorsPerTrip}
+        requiredPlan="pro"
+      />
     </SafeAreaView>
   );
 }
@@ -329,20 +698,18 @@ export default function CollaboratorsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: Spacing.xxl,
+    paddingVertical: Spacing['2xl'],
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingVertical: Spacing.md,
   },
   headerPlaceholder: {
@@ -356,7 +723,7 @@ const styles = StyleSheet.create({
   addButton: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -364,12 +731,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['2xl'],
   },
   shareCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
     marginBottom: Spacing.lg,
   },
@@ -382,7 +749,7 @@ const styles = StyleSheet.create({
   shareIcon: {
     width: 48,
     height: 48,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -390,11 +757,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   shareTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
   },
   shareSubtitle: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     marginTop: 2,
   },
   shareActions: {
@@ -408,11 +775,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.medium,
     borderWidth: 1,
   },
   codeText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
     fontFamily: 'monospace',
   },
@@ -448,19 +815,18 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   roleOptions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
   roleOption: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    gap: Spacing.xs,
+    gap: Spacing.md,
   },
   roleOptionText: {
     fontSize: FontSizes.sm,
@@ -527,6 +893,15 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     fontWeight: FontWeights.medium,
   },
+  roleBadgeSmall: {
+    paddingVertical: 2,
+    paddingHorizontal: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
+  roleBadgeTextSmall: {
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.medium,
+  },
   removeButton: {
     padding: Spacing.xs,
   },
@@ -541,5 +916,71 @@ const styles = StyleSheet.create({
   },
   emptyPendingText: {
     fontSize: FontSizes.sm,
+  },
+  emptyPendingHint: {
+    fontSize: FontSizes.xs,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: FontSizes.sm,
+    marginBottom: Spacing.sm,
+  },
+  roleDescription: {
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  loadingSmall: {
+    padding: Spacing.lg,
+    alignItems: 'center',
+  },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  invitationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+    gap: Spacing.md,
+  },
+  invitationInfo: {
+    flex: 1,
+  },
+  invitationEmail: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.medium,
+  },
+  invitationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: 4,
+  },
+  expiryText: {
+    fontSize: FontSizes.xs,
+  },
+  invitedTimeText: {
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  invitationActions: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  actionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -325,14 +325,12 @@ export default function ItineraryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingVertical: Spacing.md,
   },
   headerPlaceholder: {
@@ -346,13 +344,13 @@ const styles = StyleSheet.create({
   addButton: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     alignItems: 'center',
     justifyContent: 'center',
   },
   viewToggle: {
     flexDirection: 'row',
-    marginHorizontal: Spacing.lg,
+    marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.md,
     gap: Spacing.sm,
   },
@@ -361,11 +359,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     gap: Spacing.xs,
   },
   toggleText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   dayTabs: {
@@ -373,30 +371,30 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   dayTabsContent: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
   },
   dayTab: {
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     borderWidth: 1,
     alignItems: 'center',
     minWidth: 80,
   },
   dayNumber: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.semibold,
   },
   dayDate: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl + Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['3xl'] + Spacing.xl,
   },
   timeline: {
     paddingTop: Spacing.sm,
@@ -412,7 +410,7 @@ const styles = StyleSheet.create({
   timelineDot: {
     width: 32,
     height: 32,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -423,24 +421,24 @@ const styles = StyleSheet.create({
   },
   timelineContent: {
     flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
   },
   timelineHeader: {
     marginBottom: Spacing.xs,
   },
   itemTime: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.semibold,
   },
   itemTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
     marginBottom: 4,
   },
   itemDescription: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     lineHeight: 20,
     marginBottom: Spacing.xs,
   },
@@ -450,25 +448,25 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   locationText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   locationTextSmall: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
   },
   listView: {
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
   },
   listIcon: {
     width: 48,
     height: 48,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
@@ -479,10 +477,10 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: Spacing.xl,
-    right: Spacing.lg,
+    right: Spacing.screenPadding,
     width: 56,
     height: 56,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -491,10 +489,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.xxxl,
+    paddingVertical: Spacing['3xl'],
   },
   loadingText: {
     marginTop: Spacing.md,
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
 });

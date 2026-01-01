@@ -1,11 +1,31 @@
+import LoadingScreen from '@/components/loading-screen';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Stack } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 
 export default function TripsLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  
+  // Auth guard - redirect unauthenticated users to auth
+  const { firebaseUser, loading, isGuestMode, isWalkthroughComplete } = useAuth();
+
+  // Show loading while checking auth state
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+
+  // If user is not authenticated and not in guest mode, redirect to auth
+  if (!firebaseUser && !isGuestMode) {
+    // If walkthrough not complete, go to walkthrough first
+    if (!isWalkthroughComplete) {
+      return <Redirect href="/auth/walkthrough" />;
+    }
+    // Otherwise go to auth landing page
+    return <Redirect href="/auth" />;
+  }
 
   return (
     <Stack

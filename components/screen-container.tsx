@@ -61,9 +61,7 @@ export function ScreenContainer({
 
 const styles = StyleSheet.create({
   safeArea: {
-    // Add top and bottom margin for all screens
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
+    // SafeAreaView handles insets automatically - no extra margins needed
   },
   flex: {
     flex: 1,
@@ -72,7 +70,7 @@ const styles = StyleSheet.create({
     // Base container styles
   },
   padded: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
   },
 });
 

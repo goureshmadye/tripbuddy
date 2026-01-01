@@ -395,15 +395,13 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.xl,
   },
   header: {
@@ -411,31 +409,31 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   headerPlaceholder: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
   },
   titleContainer: {
     marginBottom: Spacing.xl,
   },
   title: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading1,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
   lockoutBanner: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.medium,
     marginBottom: Spacing.lg,
     gap: Spacing.sm,
   },
   lockoutText: {
     flex: 1,
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   form: {
@@ -446,7 +444,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   forgotPasswordText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   socialButtons: {
@@ -458,10 +456,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xl,
   },
   signupText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
   signupLink: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
   },
   guestButton: {
@@ -473,7 +471,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   guestText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
 });

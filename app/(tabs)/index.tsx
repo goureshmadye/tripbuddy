@@ -134,12 +134,6 @@ export default function MyTripsScreen() {
             {user?.name || 'Traveler'}! 👋
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.profileButton, { backgroundColor: colors.backgroundSecondary }]}
-          onPress={() => router.push('/settings')}
-        >
-          <Ionicons name="person-outline" size={24} color={colors.text} />
-        </TouchableOpacity>
       </View>
 
       {/* Action Buttons - New Trip + Join with Code */}
@@ -298,35 +292,26 @@ export default function MyTripsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
     flex: 1,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
   },
   greeting: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   userName: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
-  },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
@@ -337,16 +322,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.xs,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.button,
   },
   actionButtonText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.semibold,
     color: '#FFFFFF',
   },
   statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
@@ -354,37 +339,37 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     gap: 4,
   },
   statNumber: {
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
   },
   statLabel: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
   filterTab: {
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
   },
   filterText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   tripsList: {
     flex: 1,
   },
   tripsListContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl + Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['3xl'] + Spacing.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -393,7 +378,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   sectionTitle: {
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.semibold,
   },
   modalOverlay: {
@@ -402,10 +387,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
+    borderTopLeftRadius: BorderRadius.modal,
+    borderTopRightRadius: BorderRadius.modal,
+    padding: Spacing.screenPadding,
+    paddingBottom: Spacing['3xl'],
   },
   modalHeader: {
     flexDirection: 'row',
@@ -414,11 +399,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   modalTitle: {
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
   },
   modalDescription: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     marginBottom: Spacing.lg,
     lineHeight: 22,
   },
@@ -426,15 +411,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.input,
     borderWidth: 1,
     marginBottom: Spacing.lg,
   },
   codeInput: {
     flex: 1,
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.semibold,
     letterSpacing: 2,
   },
@@ -445,11 +430,11 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.button,
   },
   joinButtonText: {
     color: '#FFFFFF',
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
   },
   loadingContainer: {
@@ -459,6 +444,6 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   loadingText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
 });

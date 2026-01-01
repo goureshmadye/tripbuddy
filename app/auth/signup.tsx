@@ -3,32 +3,32 @@ import { Divider } from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
 import { SocialButton } from "@/components/ui/social-button";
 import {
-    Colors,
-    FontSizes,
-    FontWeights,
-    Spacing
+  Colors,
+  FontSizes,
+  FontWeights,
+  Spacing
 } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { checkEmailExists } from "@/services/auth";
 import {
-    getPasswordStrength,
-    validateEmail,
-    validatePassword,
-    validateSignupForm,
+  getPasswordStrength,
+  validateEmail,
+  validatePassword,
+  validateSignupForm,
 } from "@/utils/validation";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function SignupScreen() {
@@ -416,15 +416,13 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.xl,
   },
   header: {
@@ -439,12 +437,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   title: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
   form: {
     gap: Spacing.md,
@@ -467,12 +465,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   strengthText: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     fontWeight: FontWeights.medium,
     width: 50,
   },
   hint: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     marginTop: Spacing.xs,
   },
   socialButtons: {
@@ -484,10 +482,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xl,
   },
   loginText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
   loginLink: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
   },
 });

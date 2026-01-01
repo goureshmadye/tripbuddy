@@ -3,7 +3,9 @@ import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTrip } from '@/hooks/use-trips';
 import { createItineraryItem } from '@/services/firestore';
+import { notifyItineraryAdded } from '@/services/notifications';
 import { ItineraryCategory } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -33,6 +35,7 @@ export default function AddItineraryItemScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { trip } = useTrip(id);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
@@ -82,7 +85,7 @@ export default function AddItineraryItemScreen() {
       const startDateTime = parseDateTime(date, startTime);
       const endDateTime = parseDateTime(date, endTime);
 
-      await createItineraryItem({
+      const itineraryId = await createItineraryItem({
         tripId: id,
         title: title.trim(),
         description: description.trim() || null,
@@ -94,6 +97,16 @@ export default function AddItineraryItemScreen() {
         latitude: null,
         longitude: null,
       });
+
+      // Notify collaborators about the new activity
+      notifyItineraryAdded(
+        id,
+        trip?.title || 'Trip',
+        itineraryId,
+        title.trim(),
+        user.id,
+        user.name
+      ).catch(console.error); // Don't block on notification
       
       router.back();
     } catch (error) {
@@ -253,8 +266,6 @@ export default function AddItineraryItemScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -263,7 +274,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingVertical: Spacing.md,
   },
   headerTitle: {
@@ -277,14 +288,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['2xl'],
   },
   section: {
     marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
     marginBottom: Spacing.sm,
   },
@@ -297,12 +308,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     borderWidth: 1.5,
     gap: Spacing.xs,
   },
   categoryLabel: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   timeRow: {
@@ -317,16 +328,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     gap: Spacing.sm,
   },
   attachText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
   bottomContainer: {
-    padding: Spacing.lg,
+    padding: Spacing.screenPadding,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.05)',
   },

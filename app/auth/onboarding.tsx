@@ -9,16 +9,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const CURRENCIES = [
@@ -434,8 +434,6 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -444,7 +442,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
   },
   headerPlaceholder: {
@@ -456,7 +454,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   skipText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
   },
   progressContainer: {
@@ -469,29 +467,29 @@ const styles = StyleSheet.create({
   },
   progressDot: {
     height: 8,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
   },
   stepContent: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     alignItems: 'center',
   },
   iconContainer: {
     width: 80,
     height: 80,
-    borderRadius: BorderRadius.xxl,
+    borderRadius: BorderRadius.xxlarge,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
   },
   stepTitle: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   stepSubtitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -517,7 +515,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   photoText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   changePhotoButton: {
@@ -527,11 +525,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   changePhotoText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   optionalText: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     marginTop: Spacing.lg,
   },
   optionsList: {
@@ -543,8 +541,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.large,
     borderWidth: 1.5,
     marginBottom: Spacing.sm,
   },
@@ -554,23 +552,23 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   currencySymbol: {
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
     width: 30,
     textAlign: 'center',
   },
   optionTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
   },
   optionSubtitle: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   bottomButtons: {
-    padding: Spacing.lg,
+    padding: Spacing.screenPadding,
   },
   nameHint: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     marginTop: Spacing.sm,
     textAlign: 'center',
   },

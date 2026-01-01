@@ -1,24 +1,25 @@
 import { firestore } from '@/config/firebase';
 import {
-    COLLECTIONS,
-    Expense,
-    ExpenseShare,
-    ItineraryItem,
-    Trip,
-    TripCollaborator,
-    TripDocument,
-    TripWithDetails,
-    User,
+  COLLECTIONS,
+  Expense,
+  ExpenseShare,
+  ItineraryItem,
+  Trip,
+  TripCollaborator,
+  TripDocument,
+  TripInvitation,
+  TripWithDetails,
+  User,
 } from '@/types/database';
 import {
-    collection,
-    doc,
-    getDoc,
-    onSnapshot,
-    orderBy,
-    query,
-    Timestamp,
-    where,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  Timestamp,
+  where,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './use-auth';
@@ -190,11 +191,18 @@ export function useTrip(tripId: string | undefined) {
         const tripData: TripWithDetails = {
           id: docSnap.id,
           title: data.title,
+          destination: data.destination,
+          destinationPlaceId: data.destinationPlaceId,
+          destinationLat: data.destinationLat,
+          destinationLng: data.destinationLng,
           startDate: data.startDate?.toDate() || new Date(),
           endDate: data.endDate?.toDate() || new Date(),
           creatorId: data.creatorId,
           transportationMode: data.transportationMode,
           tripType: data.tripType,
+          budgetRange: data.budgetRange,
+          travelerCount: data.travelerCount,
+          accommodationType: data.accommodationType,
           createdAt: data.createdAt?.toDate() || new Date(),
         };
 
@@ -328,6 +336,7 @@ export function useTripExpenses(tripId: string | undefined) {
             amount: data.amount,
             currency: data.currency || 'USD',
             paidBy: data.paidBy,
+            category: data.category || 'other',
             createdAt: data.createdAt?.toDate() || new Date(),
           } as Expense;
         });
@@ -610,4 +619,169 @@ export function useExpenseShares(expenseId: string | undefined) {
   }, [expenseId]);
 
   return { shares, loading, error };
+}
+
+// ============================================
+// Hook: useTripInvitations - Real-time invitations
+// ============================================
+export function useTripInvitations(tripId: string | undefined) {
+  const [invitations, setInvitations] = useState<(TripInvitation & { inviterName?: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!tripId) {
+      setInvitations([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const q = query(
+      collection(firestore, COLLECTIONS.TRIP_INVITATIONS),
+      where('tripId', '==', tripId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      async (snapshot) => {
+        const invitesWithDetails = await Promise.all(
+          snapshot.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            const invite: TripInvitation & { inviterName?: string } = {
+              id: docSnap.id,
+              tripId: data.tripId,
+              invitedEmail: data.invitedEmail,
+              invitedUserId: data.invitedUserId,
+              invitedBy: data.invitedBy,
+              role: data.role,
+              status: data.status,
+              inviteCode: data.inviteCode,
+              expiresAt: data.expiresAt?.toDate() || new Date(),
+              createdAt: data.createdAt?.toDate() || new Date(),
+              respondedAt: data.respondedAt?.toDate() || null,
+            };
+
+            // Fetch inviter info
+            try {
+              const userDoc = await getDoc(doc(firestore, COLLECTIONS.USERS, data.invitedBy));
+              if (userDoc.exists()) {
+                invite.inviterName = userDoc.data().name;
+              }
+            } catch (err) {
+              console.warn('Error fetching inviter:', err);
+            }
+
+            return invite;
+          })
+        );
+
+        setInvitations(invitesWithDetails);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching invitations:', err);
+        setError(err as Error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [tripId]);
+
+  // Filter by status
+  const pendingInvitations = invitations.filter(inv => inv.status === 'pending');
+  const respondedInvitations = invitations.filter(inv => inv.status !== 'pending');
+
+  return { invitations, pendingInvitations, respondedInvitations, loading, error };
+}
+
+// ============================================
+// Hook: useUserInvitations - Invitations for current user
+// ============================================
+export function useUserInvitations() {
+  const { user } = useAuth();
+  const [invitations, setInvitations] = useState<(TripInvitation & { tripTitle?: string; inviterName?: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setInvitations([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const q = query(
+      collection(firestore, COLLECTIONS.TRIP_INVITATIONS),
+      where('invitedEmail', '==', user.email.toLowerCase()),
+      where('status', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      async (snapshot) => {
+        const invitesWithDetails = await Promise.all(
+          snapshot.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            const invite: TripInvitation & { tripTitle?: string; inviterName?: string } = {
+              id: docSnap.id,
+              tripId: data.tripId,
+              invitedEmail: data.invitedEmail,
+              invitedUserId: data.invitedUserId,
+              invitedBy: data.invitedBy,
+              role: data.role,
+              status: data.status,
+              inviteCode: data.inviteCode,
+              expiresAt: data.expiresAt?.toDate() || new Date(),
+              createdAt: data.createdAt?.toDate() || new Date(),
+              respondedAt: data.respondedAt?.toDate() || null,
+            };
+
+            // Fetch trip and inviter info
+            try {
+              const [tripDoc, userDoc] = await Promise.all([
+                getDoc(doc(firestore, COLLECTIONS.TRIPS, data.tripId)),
+                getDoc(doc(firestore, COLLECTIONS.USERS, data.invitedBy)),
+              ]);
+              
+              if (tripDoc.exists()) {
+                invite.tripTitle = tripDoc.data().title;
+              }
+              if (userDoc.exists()) {
+                invite.inviterName = userDoc.data().name;
+              }
+            } catch (err) {
+              console.warn('Error fetching invite details:', err);
+            }
+
+            return invite;
+          })
+        );
+
+        // Filter out expired invitations
+        const validInvites = invitesWithDetails.filter(
+          inv => new Date() < inv.expiresAt
+        );
+
+        setInvitations(validInvites);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching user invitations:', err);
+        setError(err as Error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user?.email]);
+
+  return { invitations, loading, error };
 }

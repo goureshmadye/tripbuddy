@@ -75,8 +75,6 @@ export default function NotFoundScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   content: {
     flex: 1,
@@ -87,7 +85,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 140,
     height: 140,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xl,
@@ -99,7 +97,7 @@ const styles = StyleSheet.create({
     right: 15,
     width: 32,
     height: 32,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -109,13 +107,13 @@ const styles = StyleSheet.create({
     fontWeight: FontWeights.bold,
   },
   title: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
     textAlign: 'center',
   },
   description: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: Spacing.lg,
@@ -123,12 +121,12 @@ const styles = StyleSheet.create({
   errorCode: {
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     borderWidth: 1,
     marginBottom: Spacing.xl,
   },
   errorCodeText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   actions: {

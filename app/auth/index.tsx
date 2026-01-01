@@ -33,7 +33,7 @@ export default function SplashScreen() {
     enableGuestMode 
   } = useAuth();
 
-  // Redirect authenticated users based on onboarding status
+  // Redirect based on auth and walkthrough status
   useEffect(() => {
     if (!loading) {
       // If user is in guest mode, go directly to tabs
@@ -45,14 +45,17 @@ export default function SplashScreen() {
       // If user is authenticated (logged in and not guest)
       if (firebaseUser) {
         if (!isOnboardingComplete) {
-          if (!isWalkthroughComplete) {
-            router.replace('/auth/walkthrough');
-          } else {
-            router.replace('/auth/onboarding');
-          }
+          router.replace('/auth/onboarding');
         } else {
           router.replace('/(tabs)');
         }
+        return;
+      }
+      
+      // For non-authenticated users: show walkthrough if not completed
+      if (!isWalkthroughComplete) {
+        router.replace('/auth/walkthrough');
+        return;
       }
     }
   }, [loading, firebaseUser, isOnboardingComplete, isWalkthroughComplete, isGuestMode, router]);
@@ -183,12 +186,10 @@ function FeatureItem({ icon, title, description, colors }: FeatureItemProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   content: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     justifyContent: 'space-between',
     paddingTop: height * 0.08,
     paddingBottom: Spacing.xl,
@@ -199,18 +200,18 @@ const styles = StyleSheet.create({
   logoBackground: {
     width: 120,
     height: 120,
-    borderRadius: BorderRadius.xxl,
+    borderRadius: BorderRadius.xxlarge,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
   },
   appName: {
-    fontSize: FontSizes.xxxl,
+    fontSize: FontSizes.heading1,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.xs,
   },
   tagline: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
   },
   featuresContainer: {
@@ -224,7 +225,7 @@ const styles = StyleSheet.create({
   featureIcon: {
     width: 48,
     height: 48,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -232,12 +233,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
     marginBottom: 2,
   },
   featureDescription: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   buttonContainer: {
     gap: Spacing.md,
@@ -250,11 +251,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   guestText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   termsText: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     textAlign: 'center',
     lineHeight: 18,
   },

@@ -8,14 +8,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function ForgotPasswordScreen() {
@@ -163,15 +163,13 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.xl,
   },
   header: {
@@ -189,7 +187,7 @@ const styles = StyleSheet.create({
   iconBackground: {
     width: 80,
     height: 80,
-    borderRadius: BorderRadius.xxl,
+    borderRadius: BorderRadius.xxlarge,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -198,12 +196,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
   },
   subtitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -218,30 +216,30 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   backToLoginText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
   },
   successContent: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     justifyContent: 'center',
     alignItems: 'center',
   },
   successIcon: {
     width: 100,
     height: 100,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
   },
   successTitle: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
   },
   successText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -250,7 +248,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   resendText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
 });

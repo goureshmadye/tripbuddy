@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: Spacing.lg,
+    marginVertical: Spacing.sectionGap,
   },
   line: {
     flex: 1,
@@ -42,6 +42,6 @@ const styles = StyleSheet.create({
   },
   text: {
     marginHorizontal: Spacing.md,
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
 });

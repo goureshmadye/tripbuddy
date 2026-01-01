@@ -84,9 +84,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.sm + 4,
+    paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.button,
     borderWidth: 1,
     minHeight: 48,
   },
@@ -95,8 +95,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   text: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
-    marginLeft: Spacing.sm + 4,
+    marginLeft: Spacing.md,
   },
 });

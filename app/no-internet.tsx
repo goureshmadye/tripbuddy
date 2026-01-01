@@ -5,10 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    View,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 export default function NoInternetScreen() {
@@ -92,8 +92,6 @@ export default function NoInternetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   content: {
     flex: 1,
@@ -104,32 +102,32 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 120,
     height: 120,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xl,
   },
   title: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
     textAlign: 'center',
   },
   description: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: Spacing.xl,
   },
   tipsCard: {
     width: '100%',
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
     marginBottom: Spacing.xl,
   },
   tipsTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
     marginBottom: Spacing.md,
   },
@@ -140,7 +138,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   tipText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   actions: {
     width: '100%',

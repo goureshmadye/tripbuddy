@@ -1,25 +1,30 @@
+import { LimitWarning, UpgradePrompt } from '@/components/subscription';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useTripCollaborators } from '@/hooks/use-trips';
+import { useSubscription, useTripUsage } from '@/hooks/use-subscription';
+import { useTrip, useTripCollaborators } from '@/hooks/use-trips';
 import { createExpense, createExpenseShare } from '@/services/firestore';
+import { notifyExpenseAdded } from '@/services/notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 type ExpenseCategory = 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
 type ExpenseSplitType = 'equal' | 'percentage' | 'custom';
 
@@ -50,14 +55,23 @@ export default function AddExpenseScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const insets = useSafeAreaInsets();
 
   // Auth and collaborators
   const { user } = useAuth();
+  const { trip } = useTrip(id);
   const { collaborators, loading: collaboratorsLoading, error: collaboratorsError } = useTripCollaborators(id);
+  
+  // Subscription and usage limits
+  const { limits } = useSubscription();
+  const { usage, expenseAccess, refresh: refreshUsage } = useTripUsage(id || '');
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+
+  // Use trip's currency or user's default currency
+  const currency = trip?.currency || user?.defaultCurrency || 'USD';
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency] = useState('EUR');
   const [category, setCategory] = useState<ExpenseCategory>('food');
   const [splitType, setSplitType] = useState<ExpenseSplitType>('equal');
   const [paidBy, setPaidBy] = useState<string>('');
@@ -93,6 +107,12 @@ export default function AddExpenseScreen() {
   };
 
   const handleSave = async () => {
+    // Check expense limit before saving
+    if (!expenseAccess.allowed) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+
     const newErrors: { title?: string; amount?: string } = {};
     if (!title.trim()) newErrors.title = 'Title is required';
     if (!amount || parseFloat(amount) <= 0) newErrors.amount = 'Enter a valid amount';
@@ -111,13 +131,14 @@ export default function AddExpenseScreen() {
     try {
       const expenseAmount = parseFloat(amount);
       
-      // Create expense in Firestore
+      // Create expense in Firestore - include category
       const expenseId = await createExpense({
         tripId: id,
         title: title.trim(),
         amount: expenseAmount,
         currency,
         paidBy,
+        category, // Add the selected category
       });
 
       // Create expense shares for selected members
@@ -136,6 +157,21 @@ export default function AddExpenseScreen() {
         );
       }
 
+      // Notify collaborators about the new expense
+      const formattedAmount = `${currency} ${expenseAmount.toFixed(2)}`;
+      notifyExpenseAdded(
+        id,
+        trip?.title || 'Trip',
+        expenseId,
+        title.trim(),
+        formattedAmount,
+        user.id,
+        user.name
+      ).catch(console.error); // Don't block on notification
+
+      // Refresh usage counts
+      await refreshUsage();
+
       router.back();
     } catch (error) {
       console.error('Save error:', error);
@@ -151,14 +187,32 @@ export default function AddExpenseScreen() {
     : '0.00';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      
+      {/* Upgrade Prompt Modal */}
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        feature="Expense Limit Reached"
+        message={`You've used ${usage?.expenseCount || 0} of ${limits.maxExpensesPerTrip} expenses for this trip.`}
+        currentUsage={usage?.expenseCount}
+        limit={limits.maxExpensesPerTrip}
+        requiredPlan="pro"
+      />
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerPlaceholder} />
+        {/* Header with proper safe area padding */}
+        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+          <TouchableOpacity 
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Add Expense</Text>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -169,29 +223,60 @@ export default function AddExpenseScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Amount Input */}
-          <View style={styles.amountSection}>
-            <Text style={[styles.currencyLabel, { color: colors.textSecondary }]}>{currency}</Text>
-            <Input
-              placeholder="0.00"
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              error={errors.amount}
-              style={styles.amountInput}
+          {/* Limit Warning */}
+          {limits.maxExpensesPerTrip !== Infinity && usage && (
+            <LimitWarning
+              current={usage.expenseCount}
+              limit={limits.maxExpensesPerTrip}
+              type="expenses"
             />
+          )}
+          
+          {/* Amount Input - Improved visibility */}
+          <View style={[styles.amountSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.currencyLabel, { color: colors.textSecondary }]}>
+              Amount ({currency})
+            </Text>
+            <View style={styles.amountInputContainer}>
+              <Text style={[styles.currencySymbol, { color: colors.text }]}>
+                {currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : '$'}
+              </Text>
+              <TextInput
+                placeholder="0.00"
+                placeholderTextColor={colors.textMuted}
+                value={amount}
+                onChangeText={(text) => {
+                  setAmount(text);
+                  if (errors.amount) setErrors({ ...errors, amount: undefined });
+                }}
+                keyboardType="decimal-pad"
+                style={[styles.amountInputText, { color: colors.text }]}
+              />
+            </View>
+            {errors.amount && (
+              <Text style={styles.errorText}>{errors.amount}</Text>
+            )}
           </View>
 
-          {/* Title */}
+          {/* Title/Description - Improved spacing */}
           <View style={styles.section}>
-            <Input
-              label="Description"
-              placeholder="What was this expense for?"
-              value={title}
-              onChangeText={setTitle}
-              error={errors.title}
-              leftIcon="receipt-outline"
-            />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Description</Text>
+            <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: errors.title ? Colors.error : colors.border }]}>
+              <Ionicons name="receipt-outline" size={20} color={colors.textSecondary} />
+              <TextInput
+                placeholder="What was this expense for?"
+                placeholderTextColor={colors.textMuted}
+                value={title}
+                onChangeText={(text) => {
+                  setTitle(text);
+                  if (errors.title) setErrors({ ...errors, title: undefined });
+                }}
+                style={[styles.textInput, { color: colors.text }]}
+              />
+            </View>
+            {errors.title && (
+              <Text style={styles.errorText}>{errors.title}</Text>
+            )}
           </View>
 
           {/* Category */}
@@ -237,40 +322,40 @@ export default function AddExpenseScreen() {
                 <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading members...</Text>
               </View>
             ) : collaboratorsError ? (
-              <Text style={[styles.errorText, { color: Colors.error }]}>
+              <Text style={[styles.errorTextSmall, { color: Colors.error }]}>
                 Error loading members. Please try again.
               </Text>
             ) : (
-            <View style={styles.paidByOptions}>
-              {members.map((member) => (
-                <TouchableOpacity
-                  key={member.id}
-                  style={[
-                    styles.paidByOption,
-                    {
-                      backgroundColor: paidBy === member.id ? Colors.primary + '15' : colors.card,
-                      borderColor: paidBy === member.id ? Colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setPaidBy(member.id)}
-                >
-                  <View style={[
-                    styles.paidByAvatar, 
-                    { backgroundColor: paidBy === member.id ? Colors.primary : colors.textMuted }
-                  ]}>
-                    <Text style={styles.paidByAvatarText}>{member.name.charAt(0)}</Text>
-                  </View>
-                  <Text
+              <View style={styles.paidByOptions}>
+                {members.map((member) => (
+                  <TouchableOpacity
+                    key={member.id}
                     style={[
-                      styles.paidByName,
-                      { color: paidBy === member.id ? Colors.primary : colors.text },
+                      styles.paidByOption,
+                      {
+                        backgroundColor: paidBy === member.id ? Colors.primary + '15' : colors.card,
+                        borderColor: paidBy === member.id ? Colors.primary : colors.border,
+                      },
                     ]}
+                    onPress={() => setPaidBy(member.id)}
                   >
-                    {member.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <View style={[
+                      styles.paidByAvatar, 
+                      { backgroundColor: paidBy === member.id ? Colors.primary : colors.textMuted }
+                    ]}>
+                      <Text style={styles.paidByAvatarText}>{member.name.charAt(0)}</Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.paidByName,
+                        { color: paidBy === member.id ? Colors.primary : colors.text },
+                      ]}
+                    >
+                      {member.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             )}
           </View>
 
@@ -321,42 +406,44 @@ export default function AddExpenseScreen() {
           {/* Split Among */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Split Among</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Split Among</Text>
               <Text style={[styles.perPersonLabel, { color: Colors.primary }]}>
-                €{perPersonAmount} each
+                {currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : '$'}{perPersonAmount} each
               </Text>
             </View>
-            {members.map((member) => (
-              <TouchableOpacity
-                key={member.id}
-                style={[
-                  styles.memberOption,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                ]}
-                onPress={() => toggleMember(member.id)}
-              >
-                <View style={[styles.memberAvatar, { backgroundColor: Colors.primary + '20' }]}>
-                  <Text style={[styles.memberAvatarText, { color: Colors.primary }]}>
-                    {member.name.charAt(0)}
-                  </Text>
-                </View>
-                <Text style={[styles.memberName, { color: colors.text }]}>{member.name}</Text>
-                <View style={[
-                  styles.checkbox,
-                  { 
-                    backgroundColor: member.selected ? Colors.primary : 'transparent',
-                    borderColor: member.selected ? Colors.primary : colors.border,
-                  },
-                ]}>
-                  {member.selected && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
-                </View>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.membersContainer}>
+              {members.map((member) => (
+                <TouchableOpacity
+                  key={member.id}
+                  style={[
+                    styles.memberOption,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                  onPress={() => toggleMember(member.id)}
+                >
+                  <View style={[styles.memberAvatar, { backgroundColor: Colors.primary + '20' }]}>
+                    <Text style={[styles.memberAvatarText, { color: Colors.primary }]}>
+                      {member.name.charAt(0)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.memberName, { color: colors.text }]}>{member.name}</Text>
+                  <View style={[
+                    styles.checkbox,
+                    { 
+                      backgroundColor: member.selected ? Colors.primary : 'transparent',
+                      borderColor: member.selected ? Colors.primary : colors.border,
+                    },
+                  ]}>
+                    {member.selected && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </ScrollView>
 
         {/* Bottom Button */}
-        <View style={[styles.bottomContainer, { backgroundColor: colors.background }]}>
+        <View style={[styles.bottomContainer, { backgroundColor: colors.background, paddingBottom: insets.bottom + Spacing.md }]}>
           <Button
             title="Save Expense"
             onPress={handleSave}
@@ -367,15 +454,13 @@ export default function AddExpenseScreen() {
           />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
   keyboardView: {
     flex: 1,
@@ -385,7 +470,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,
@@ -399,7 +490,78 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+    paddingBottom: Spacing['2xl'],
+  },
+  amountSection: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+  },
+  currencyLabel: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.medium,
+    marginBottom: Spacing.md,
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currencySymbol: {
+    fontSize: FontSizes.display,
+    fontWeight: FontWeights.bold,
+    marginRight: Spacing.xs,
+  },
+  amountInputText: {
+    fontSize: FontSizes.display,
+    fontWeight: FontWeights.bold,
+    textAlign: 'center',
+    minWidth: 150,
+  },
+  section: {
+    marginBottom: Spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.semibold,
+    marginBottom: Spacing.sm,
+  },
+  perPersonLabel: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.semibold,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    gap: Spacing.sm,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: FontSizes.md,
+    paddingVertical: Spacing.xs,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: FontSizes.sm,
+    marginTop: Spacing.xs,
+  },
+  errorTextSmall: {
+    fontSize: FontSizes.sm,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -410,46 +572,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: FontSizes.sm,
-  },
-  errorText: {
-    fontSize: FontSizes.sm,
-    textAlign: 'center',
-    paddingVertical: Spacing.md,
-  },
-  amountSection: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xl,
-  },
-  currencyLabel: {
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.medium,
-    marginBottom: Spacing.sm,
-  },
-  amountInput: {
-    alignItems: 'center',
-  },
-  amountInputText: {
-    fontSize: FontSizes.display,
-    fontWeight: FontWeights.bold,
-    textAlign: 'center',
-  },
-  section: {
-    marginBottom: Spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-    marginBottom: Spacing.sm,
-  },
-  perPersonLabel: {
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
   },
   categoriesGrid: {
     flexDirection: 'row',
@@ -470,10 +592,12 @@ const styles = StyleSheet.create({
   },
   paidByOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
   paidByOption: {
     flex: 1,
+    minWidth: '45%',
     alignItems: 'center',
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
@@ -536,6 +660,9 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.primary,
+  },
+  membersContainer: {
+    marginTop: Spacing.sm,
   },
   memberOption: {
     flexDirection: 'row',

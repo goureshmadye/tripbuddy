@@ -19,5 +19,11 @@ service firebase.storage {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
+    
+    // Profile photos (alternative path)
+    match /profile-photos/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
   }
 }
