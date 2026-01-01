@@ -1,19 +1,21 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { validateEmail } from '@/utils/validation';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function ForgotPasswordScreen() {
@@ -21,6 +23,7 @@ export default function ForgotPasswordScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { resetPassword } = useAuth();
 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,20 +35,21 @@ export default function ForgotPasswordScreen() {
       setError('Email is required');
       return;
     }
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      setError('Please enter a valid email');
+    
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+      setError(emailValidation.error || 'Please enter a valid email');
       return;
     }
     
     setError('');
     setLoading(true);
     try {
-      // TODO: Implement Firebase password reset
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await resetPassword(email);
       setSent(true);
     } catch (error) {
       console.error('Reset password error:', error);
-      setError('Failed to send reset email. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to send reset email. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -96,12 +100,7 @@ export default function ForgotPasswordScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <View style={styles.headerPlaceholder} />
           </View>
 
           {/* Icon */}
@@ -170,19 +169,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.xl,
   },
   header: {
     paddingTop: Spacing.md,
     marginBottom: Spacing.lg,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   iconContainer: {
     alignItems: 'center',
@@ -191,7 +187,7 @@ const styles = StyleSheet.create({
   iconBackground: {
     width: 80,
     height: 80,
-    borderRadius: BorderRadius.xxl,
+    borderRadius: BorderRadius.xxlarge,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -200,12 +196,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
   },
   subtitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -220,30 +216,30 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   backToLoginText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
   },
   successContent: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     justifyContent: 'center',
     alignItems: 'center',
   },
   successIcon: {
     width: 100,
     height: 100,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
   },
   successTitle: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
   },
   successText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -252,7 +248,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   resendText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
 });

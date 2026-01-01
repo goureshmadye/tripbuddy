@@ -1,4 +1,4 @@
-import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
+import { BorderRadius, Colors, ComponentSizes, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import React from 'react';
 import {
@@ -96,18 +96,18 @@ export function Button({
     switch (size) {
       case 'sm':
         return {
-          container: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md },
-          text: { fontSize: FontSizes.sm },
+          container: { height: 40, paddingHorizontal: Spacing.base },
+          text: { fontSize: FontSizes.bodySmall },
         };
       case 'lg':
         return {
-          container: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl },
-          text: { fontSize: FontSizes.lg },
+          container: { height: ComponentSizes.buttonHeight, paddingHorizontal: Spacing.xl },
+          text: { fontSize: FontSizes.body },
         };
       default:
         return {
-          container: { paddingVertical: Spacing.sm + 4, paddingHorizontal: Spacing.lg },
-          text: { fontSize: FontSizes.md },
+          container: { height: ComponentSizes.buttonHeightSecondary, paddingHorizontal: Spacing.lg },
+          text: { fontSize: FontSizes.body },
         };
     }
   };
@@ -146,7 +146,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.button,
     alignItems: 'center',
     justifyContent: 'center',
   },

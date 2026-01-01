@@ -1,30 +1,33 @@
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    DocumentData,
-    getDoc,
-    getDocs,
-    orderBy,
-    query,
-    setDoc,
-    Timestamp,
-    updateDoc,
-    where
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  DocumentData,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import { firestore } from '../config/firebase';
 import {
-    COLLECTIONS,
-    CreateInput,
-    Expense,
-    ExpenseShare,
-    ItineraryItem,
-    Trip,
-    TripCollaborator,
-    TripDocument,
-    User,
-    UserLocation,
+  CollaboratorRole,
+  COLLECTIONS,
+  CreateInput,
+  Expense,
+  ExpenseShare,
+  InvitationStatus,
+  ItineraryItem,
+  Trip,
+  TripCollaborator,
+  TripDocument,
+  TripInvitation,
+  User,
+  UserLocation
 } from '../types/database';
 
 // ============================================
@@ -159,6 +162,251 @@ export const removeCollaborator = async (collaboratorId: string): Promise<void> 
   await deleteDoc(docRef);
 };
 
+export const updateCollaboratorRole = async (collaboratorId: string, role: CollaboratorRole): Promise<void> => {
+  const docRef = doc(firestore, COLLECTIONS.TRIP_COLLABORATORS, collaboratorId);
+  await updateDoc(docRef, { role });
+};
+
+export const getCollaboratorByUserAndTrip = async (userId: string, tripId: string): Promise<TripCollaborator | null> => {
+  const q = query(
+    collaboratorsCollection, 
+    where('tripId', '==', tripId), 
+    where('userId', '==', userId)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const docSnap = snapshot.docs[0];
+  return { id: docSnap.id, ...docSnap.data() } as TripCollaborator;
+};
+
+// ============================================
+// Trip Invitations Collection
+// ============================================
+
+export const invitationsCollection = collection(firestore, COLLECTIONS.TRIP_INVITATIONS);
+
+// Generate a unique invite code
+const generateInviteCode = (): string => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'TRIP-';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+export const createInvitation = async (data: {
+  tripId: string;
+  invitedEmail: string;
+  invitedBy: string;
+  role: CollaboratorRole;
+  expiresInDays?: number;
+}): Promise<{ id: string; inviteCode: string }> => {
+  // Check if there's already a pending invitation for this email and trip
+  const existingInvite = await getPendingInvitationByEmail(data.tripId, data.invitedEmail);
+  if (existingInvite) {
+    throw new Error('An invitation has already been sent to this email address.');
+  }
+
+  // Check if user is already a collaborator
+  const existingUser = await getUserByEmail(data.invitedEmail);
+  if (existingUser) {
+    const existingCollab = await getCollaboratorByUserAndTrip(existingUser.id, data.tripId);
+    if (existingCollab) {
+      throw new Error('This user is already a member of this trip.');
+    }
+  }
+
+  const inviteCode = generateInviteCode();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + (data.expiresInDays || 7));
+
+  const docRef = await addDoc(invitationsCollection, {
+    tripId: data.tripId,
+    invitedEmail: data.invitedEmail.toLowerCase().trim(),
+    invitedUserId: existingUser?.id || null,
+    invitedBy: data.invitedBy,
+    role: data.role,
+    status: 'pending' as InvitationStatus,
+    inviteCode,
+    expiresAt: dateToTimestamp(expiresAt),
+    createdAt: Timestamp.now(),
+    respondedAt: null,
+  });
+
+  return { id: docRef.id, inviteCode };
+};
+
+export const getInvitation = async (invitationId: string): Promise<TripInvitation | null> => {
+  const docRef = doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) return null;
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    ...data,
+    expiresAt: timestampToDate(data.expiresAt),
+    createdAt: timestampToDate(data.createdAt),
+    respondedAt: data.respondedAt ? timestampToDate(data.respondedAt) : null,
+  } as TripInvitation;
+};
+
+export const getInvitationByCode = async (inviteCode: string): Promise<TripInvitation | null> => {
+  const q = query(invitationsCollection, where('inviteCode', '==', inviteCode));
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const docSnap = snapshot.docs[0];
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    ...data,
+    expiresAt: timestampToDate(data.expiresAt),
+    createdAt: timestampToDate(data.createdAt),
+    respondedAt: data.respondedAt ? timestampToDate(data.respondedAt) : null,
+  } as TripInvitation;
+};
+
+export const getTripInvitations = async (tripId: string): Promise<TripInvitation[]> => {
+  const q = query(
+    invitationsCollection, 
+    where('tripId', '==', tripId),
+    orderBy('createdAt', 'desc')
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((docSnap) => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+      expiresAt: timestampToDate(data.expiresAt),
+      createdAt: timestampToDate(data.createdAt),
+      respondedAt: data.respondedAt ? timestampToDate(data.respondedAt) : null,
+    } as TripInvitation;
+  });
+};
+
+export const getPendingInvitationByEmail = async (tripId: string, email: string): Promise<TripInvitation | null> => {
+  const q = query(
+    invitationsCollection,
+    where('tripId', '==', tripId),
+    where('invitedEmail', '==', email.toLowerCase().trim()),
+    where('status', '==', 'pending')
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const docSnap = snapshot.docs[0];
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    ...data,
+    expiresAt: timestampToDate(data.expiresAt),
+    createdAt: timestampToDate(data.createdAt),
+    respondedAt: data.respondedAt ? timestampToDate(data.respondedAt) : null,
+  } as TripInvitation;
+};
+
+export const getUserPendingInvitations = async (email: string): Promise<TripInvitation[]> => {
+  const q = query(
+    invitationsCollection,
+    where('invitedEmail', '==', email.toLowerCase().trim()),
+    where('status', '==', 'pending')
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((docSnap) => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+      expiresAt: timestampToDate(data.expiresAt),
+      createdAt: timestampToDate(data.createdAt),
+      respondedAt: data.respondedAt ? timestampToDate(data.respondedAt) : null,
+    } as TripInvitation;
+  });
+};
+
+export const acceptInvitation = async (invitationId: string, userId: string): Promise<string> => {
+  const invitation = await getInvitation(invitationId);
+  if (!invitation) {
+    throw new Error('Invitation not found.');
+  }
+
+  if (invitation.status !== 'pending') {
+    throw new Error('This invitation has already been responded to.');
+  }
+
+  if (new Date() > invitation.expiresAt) {
+    // Mark as expired
+    await updateDoc(doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId), {
+      status: 'expired' as InvitationStatus,
+    });
+    throw new Error('This invitation has expired.');
+  }
+
+  // Check if user is already a collaborator
+  const existingCollab = await getCollaboratorByUserAndTrip(userId, invitation.tripId);
+  if (existingCollab) {
+    throw new Error('You are already a member of this trip.');
+  }
+
+  // Add as collaborator
+  const collaboratorId = await addCollaborator({
+    tripId: invitation.tripId,
+    userId: userId,
+    role: invitation.role,
+  });
+
+  // Update invitation status
+  await updateDoc(doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId), {
+    status: 'accepted' as InvitationStatus,
+    invitedUserId: userId,
+    respondedAt: Timestamp.now(),
+  });
+
+  return collaboratorId;
+};
+
+export const declineInvitation = async (invitationId: string): Promise<void> => {
+  const invitation = await getInvitation(invitationId);
+  if (!invitation) {
+    throw new Error('Invitation not found.');
+  }
+
+  if (invitation.status !== 'pending') {
+    throw new Error('This invitation has already been responded to.');
+  }
+
+  await updateDoc(doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId), {
+    status: 'declined' as InvitationStatus,
+    respondedAt: Timestamp.now(),
+  });
+};
+
+export const cancelInvitation = async (invitationId: string): Promise<void> => {
+  const docRef = doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId);
+  await deleteDoc(docRef);
+};
+
+export const resendInvitation = async (invitationId: string): Promise<string> => {
+  const invitation = await getInvitation(invitationId);
+  if (!invitation) {
+    throw new Error('Invitation not found.');
+  }
+
+  // Generate new code and extend expiry
+  const newInviteCode = generateInviteCode();
+  const newExpiresAt = new Date();
+  newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+
+  await updateDoc(doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId), {
+    inviteCode: newInviteCode,
+    expiresAt: dateToTimestamp(newExpiresAt),
+    status: 'pending' as InvitationStatus,
+    respondedAt: null,
+  });
+
+  return newInviteCode;
+};
+
 // ============================================
 // Itinerary Items Collection
 // ============================================
@@ -245,9 +493,21 @@ export const getTripUserLocations = async (tripId: string): Promise<UserLocation
 
 export const expensesCollection = collection(firestore, COLLECTIONS.EXPENSES);
 
-export const createExpense = async (data: CreateInput<Expense>): Promise<string> => {
+export const createExpense = async (data: {
+  tripId: string;
+  title: string;
+  amount: number;
+  currency: string;
+  paidBy: string;
+  category?: string;
+}): Promise<string> => {
   const docRef = await addDoc(expensesCollection, {
-    ...data,
+    tripId: data.tripId,
+    title: data.title,
+    amount: data.amount,
+    currency: data.currency,
+    paidBy: data.paidBy,
+    category: data.category || 'other',
     createdAt: Timestamp.now(),
   });
   return docRef.id;

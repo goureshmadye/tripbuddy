@@ -1,23 +1,27 @@
 import { MapViewComponent, Marker, Polyline } from '@/components/maps';
+import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTrip, useTripItinerary } from '@/hooks/use-trips';
 import { ItineraryItem } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    Linking,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Linking,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 // Region type definition for cross-platform compatibility
@@ -29,6 +33,12 @@ interface Region {
 }
 
 const { width, height } = Dimensions.get('window');
+
+// Responsive sizing
+const isSmallScreen = width < 375;
+const BUTTON_SIZE = isSmallScreen ? 40 : 44;
+const MARKER_SIZE = isSmallScreen ? 32 : 38;
+const BOTTOM_SHEET_HEIGHT = height * 0.42;
 
 const CATEGORY_COLORS: Record<string, string> = {
   activity: '#8B5CF6',
@@ -64,14 +74,70 @@ export default function MapScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const mapRef = useRef<any>(null);
 
-  const [items] = useState<ItineraryItem[]>([]);
+  const { trip } = useTrip(id);
+  const { items, loading, error } = useTripItinerary(id);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [showRoute, setShowRoute] = useState(false);
+  
+  // Animation values
+  const bottomSheetAnim = useRef(new Animated.Value(0)).current;
+  const selectedCardAnim = useRef(new Animated.Value(0)).current;
+  
+  // Animate bottom sheet on mount
+  useEffect(() => {
+    Animated.spring(bottomSheetAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 8,
+    }).start();
+  }, []);
+  
+  // Animate selected card when item changes
+  useEffect(() => {
+    if (selectedItem) {
+      selectedCardAnim.setValue(0);
+      Animated.spring(selectedCardAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 10,
+      }).start();
+    }
+  }, [selectedItem?.id]);
+  
+  // Set initial region based on trip destination or default
+  const getInitialRegion = (): Region => {
+    if (trip?.destinationLat != null && trip?.destinationLng != null) {
+      return {
+        latitude: trip.destinationLat,
+        longitude: trip.destinationLng,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      };
+    }
+    return INITIAL_REGION;
+  };
+  
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
+  
+  // Update region when trip destination is loaded
+  useEffect(() => {
+    if (trip?.destinationLat != null && trip?.destinationLng != null) {
+      const destinationRegion = {
+        latitude: trip.destinationLat,
+        longitude: trip.destinationLng,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      };
+      setRegion(destinationRegion);
+      mapRef.current?.animateToRegion(destinationRegion, 500);
+    }
+  }, [trip?.destinationLat, trip?.destinationLng]);
 
   // Request location permission and get user location
   useEffect(() => {
@@ -202,27 +268,7 @@ export default function MapScreen() {
     Linking.openURL(url as string);
   };
 
-  // Custom map style for dark mode
-  const darkMapStyle = [
-    { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#263c3f' }] },
-    { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#38414e' }] },
-    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
-    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
-    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#746855' }] },
-    { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
-    { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#f3d19c' }] },
-    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3948' }] },
-    { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
-    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
-    { featureType: 'water', elementType: 'labels.text.stroke', stylers: [{ color: '#17263c' }] },
-  ];
+  // Map will always use light mode (no custom styling)
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -238,12 +284,15 @@ export default function MapScreen() {
           showsMyLocationButton={false}
           showsCompass={true}
           showsScale={true}
-          customMapStyle={isDark ? darkMapStyle : undefined}
+          customMapStyle={undefined}
           onMapReady={fitToMarkers}
         >
           {/* Markers for each itinerary item */}
-          {filteredItems.map((item, index) => (
-            item.latitude && item.longitude && (
+          {filteredItems.map((item, index) => {
+            if (item.latitude == null || item.longitude == null) {
+              return null;
+            }
+            return (
               <Marker
                 key={item.id}
                 coordinate={{
@@ -270,8 +319,8 @@ export default function MapScreen() {
                   ]} />
                 </View>
               </Marker>
-            )
-          ))}
+            );
+          })}
 
           {/* Route polyline */}
           {showRoute && routeCoordinates.length > 1 && (
@@ -284,14 +333,28 @@ export default function MapScreen() {
           )}
         </MapViewComponent>
 
+        {/* Loading Overlay */}
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.text }]}>Loading itinerary...</Text>
+          </View>
+        )}
+
+        {/* Error Overlay */}
+        {error && (
+          <View style={styles.errorOverlay}>
+            <EmptyState
+              icon="alert-circle-outline"
+              title="Unable to load itinerary"
+              description={error.message || "There was an error loading map markers."}
+            />
+          </View>
+        )}
+
         {/* Map Header Overlay */}
         <View style={styles.mapHeader}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.sm]}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
           
           {showSearch ? (
             <View style={[styles.searchContainer, { backgroundColor: colors.card }, Shadows.sm]}>
@@ -321,48 +384,72 @@ export default function MapScreen() {
         {/* Map Controls */}
         <View style={styles.mapControls}>
           <TouchableOpacity
-            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.sm]}
+            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.md]}
             onPress={() => {
               const newDelta = Math.max(region.latitudeDelta * 0.5, 0.002);
               mapRef.current?.animateToRegion({
                 ...region,
                 latitudeDelta: newDelta,
                 longitudeDelta: newDelta,
-              }, 200);
+              }, 300);
             }}
+            activeOpacity={0.7}
           >
-            <Ionicons name="add" size={24} color={colors.text} />
+            <Ionicons name="add" size={22} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.sm]}
+            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.md]}
             onPress={() => {
               const newDelta = Math.min(region.latitudeDelta * 2, 10);
               mapRef.current?.animateToRegion({
                 ...region,
                 latitudeDelta: newDelta,
                 longitudeDelta: newDelta,
-              }, 200);
+              }, 300);
             }}
+            activeOpacity={0.7}
           >
-            <Ionicons name="remove" size={24} color={colors.text} />
+            <Ionicons name="remove" size={22} color={colors.text} />
           </TouchableOpacity>
+          <View style={styles.controlDivider} />
           <TouchableOpacity
-            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.sm]}
+            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.md]}
             onPress={centerOnUser}
+            activeOpacity={0.7}
           >
-            <Ionicons name="locate" size={24} color={colors.text} />
+            <Ionicons name="locate" size={20} color={Colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.sm]}
+            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.md]}
             onPress={fitToMarkers}
+            activeOpacity={0.7}
           >
-            <Ionicons name="expand" size={24} color={colors.text} />
+            <Ionicons name="scan-outline" size={20} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Bottom Sheet */}
-      <View style={[styles.bottomSheet, { backgroundColor: colors.card }, Shadows.lg]}>
+      <Animated.View 
+        style={[
+          styles.bottomSheet, 
+          { backgroundColor: colors.card },
+          Shadows.lg,
+          {
+            transform: [{
+              translateY: bottomSheetAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [BOTTOM_SHEET_HEIGHT, 0],
+              }),
+            }],
+          },
+        ]}
+      >
+        {/* Drag Handle */}
+        <View style={styles.dragHandle}>
+          <View style={[styles.dragIndicator, { backgroundColor: colors.border }]} />
+        </View>
+        
         {/* Day Filter */}
         <ScrollView 
           horizontal 
@@ -388,10 +475,11 @@ export default function MapScreen() {
               key={day}
               style={[
                 styles.dayChip,
-                selectedDay === index && { backgroundColor: Colors.primary },
-                { borderColor: colors.border },
+                selectedDay === index && styles.dayChipActive,
+                { borderColor: selectedDay === index ? Colors.primary : colors.border },
               ]}
               onPress={() => { setSelectedDay(index); setTimeout(fitToMarkers, 100); }}
+              activeOpacity={0.7}
             >
               <Text style={[
                 styles.dayChipText,
@@ -406,13 +494,14 @@ export default function MapScreen() {
           <TouchableOpacity
             style={[
               styles.actionButton, 
-              { backgroundColor: showRoute ? Colors.primary : Colors.primary + '15' },
+              showRoute ? styles.actionButtonActive : { backgroundColor: Colors.primary + '12' },
             ]}
             onPress={handleOptimizeRoute}
+            activeOpacity={0.8}
           >
             <Ionicons 
-              name="git-branch-outline" 
-              size={20} 
+              name={showRoute ? "checkmark-circle" : "git-branch-outline"}
+              size={18} 
               color={showRoute ? '#FFFFFF' : Colors.primary} 
             />
             <Text style={[
@@ -423,69 +512,101 @@ export default function MapScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: Colors.secondary + '15' }]}
+            style={[styles.actionButton, { backgroundColor: Colors.secondary + '12' }]}
             onPress={handleGetDirections}
+            activeOpacity={0.8}
           >
-            <Ionicons name="navigate-outline" size={20} color={Colors.secondary} />
-            <Text style={[styles.actionText, { color: Colors.secondary }]}>Get Directions</Text>
+            <Ionicons name="navigate-outline" size={18} color={Colors.secondary} />
+            <Text style={[styles.actionText, { color: Colors.secondary }]}>Directions</Text>
           </TouchableOpacity>
         </View>
 
         {/* Selected Item Card */}
         {selectedItem && (
-          <View style={[styles.selectedCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <View style={[styles.cardIcon, { backgroundColor: getCategoryColor(selectedItem.category) + '20' }]}>
+          <Animated.View 
+            style={[
+              styles.selectedCard, 
+              { backgroundColor: colors.background, borderColor: Colors.primary + '40' },
+              {
+                opacity: selectedCardAnim,
+                transform: [{
+                  scale: selectedCardAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.95, 1],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <View style={[styles.cardIcon, { backgroundColor: getCategoryColor(selectedItem.category) + '15' }]}>
               <Ionicons 
                 name={getCategoryIcon(selectedItem.category)} 
-                size={24} 
+                size={22} 
                 color={getCategoryColor(selectedItem.category)} 
               />
             </View>
             <View style={styles.cardContent}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>{selectedItem.title}</Text>
-              <Text style={[styles.cardLocation, { color: colors.textSecondary }]}>{selectedItem.location}</Text>
+              <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{selectedItem.title}</Text>
+              <Text style={[styles.cardLocation, { color: colors.textSecondary }]} numberOfLines={1}>{selectedItem.location}</Text>
             </View>
             <TouchableOpacity
-              style={[styles.cardAction, { backgroundColor: Colors.primary }]}
+              style={styles.cardAction}
               onPress={() => router.push(`/trips/${id}/itinerary/${selectedItem.id}`)}
+              activeOpacity={0.8}
             >
-              <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         )}
 
         {/* Places List */}
-        <ScrollView 
-          style={styles.placesList}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={[styles.listTitle, { color: colors.textSecondary }]}>
-            {filteredItems.length} Places
-          </Text>
-          {filteredItems.map((item, index) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.placeItem,
-                { borderColor: colors.border },
-                selectedItem?.id === item.id && { borderColor: Colors.primary, backgroundColor: Colors.primary + '08' },
-              ]}
-              onPress={() => selectAndFocusItem(item)}
-            >
-              <View style={[styles.placeNumber, { backgroundColor: getCategoryColor(item.category) }]}>
-                <Text style={styles.placeNumberText}>{index + 1}</Text>
-              </View>
-              <View style={styles.placeContent}>
-                <Text style={[styles.placeTitle, { color: colors.text }]}>{item.title}</Text>
-                <Text style={[styles.placeLocation, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {item.location}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+        <View style={styles.placesListContainer}>
+          <View style={styles.listHeader}>
+            <Text style={[styles.listTitle, { color: colors.textSecondary }]}>
+              {filteredItems.length} {filteredItems.length === 1 ? 'Place' : 'Places'}
+            </Text>
+            {selectedItem && (
+              <TouchableOpacity onPress={() => setSelectedItem(null)}>
+                <Text style={[styles.clearSelection, { color: Colors.primary }]}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <ScrollView 
+            style={styles.placesList}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.placesListContent}
+          >
+            {filteredItems.map((item, index) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.placeItem,
+                  { 
+                    backgroundColor: selectedItem?.id === item.id ? Colors.primary + '08' : 'transparent',
+                    borderColor: selectedItem?.id === item.id ? Colors.primary + '30' : colors.borderLight,
+                  },
+                ]}
+                onPress={() => selectAndFocusItem(item)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.placeNumber, { backgroundColor: getCategoryColor(item.category) }]}>
+                  <Text style={styles.placeNumberText}>{index + 1}</Text>
+                </View>
+                <View style={styles.placeContent}>
+                  <Text style={[styles.placeTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[styles.placeLocation, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {item.location}
+                  </Text>
+                </View>
+                <View style={[styles.placeArrow, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </View>
+              </TouchableOpacity>
+            ))}
+            <View style={styles.listFooter} />
+          </ScrollView>
+        </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -501,19 +622,42 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFillObject,
   },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.medium,
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
   mapHeader: {
     position: 'absolute',
-    top: Spacing.md,
-    left: Spacing.lg,
-    right: Spacing.lg,
+    top: Spacing.lg,
+    left: Spacing.md,
+    right: Spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     zIndex: 10,
   },
+  headerPlaceholder: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+  },
   mapButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.lg,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -523,33 +667,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
+    height: BUTTON_SIZE,
     gap: Spacing.sm,
   },
   searchInput: {
     flex: 1,
-    fontSize: FontSizes.md,
-    paddingVertical: Spacing.sm,
+    fontSize: FontSizes.sm,
+    paddingVertical: 0,
   },
   mapControls: {
     position: 'absolute',
-    right: Spacing.lg,
-    top: '25%',
+    right: Spacing.md,
+    top: '20%',
     gap: Spacing.xs,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xs,
+    ...Shadows.md,
+  },
+  controlDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginVertical: Spacing.xs / 2,
   },
   markerContainer: {
     alignItems: 'center',
   },
   selectedMarker: {
-    transform: [{ scale: 1.2 }],
+    transform: [{ scale: 1.15 }],
   },
   marker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: MARKER_SIZE,
+    height: MARKER_SIZE,
+    borderRadius: MARKER_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
+    borderWidth: 2.5,
     borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -559,37 +713,53 @@ const styles = StyleSheet.create({
   },
   markerNumber: {
     color: '#FFFFFF',
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
     fontWeight: FontWeights.bold,
   },
   markerArrow: {
     width: 0,
     height: 0,
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderTopWidth: 10,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    marginTop: -2,
+    marginTop: -1,
   },
   bottomSheet: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    paddingTop: Spacing.md,
-    maxHeight: height * 0.45,
+    borderTopLeftRadius: BorderRadius.xxlarge,
+    borderTopRightRadius: BorderRadius.xxlarge,
+    paddingTop: 0,
+    paddingBottom: Spacing['2xl'],
+    maxHeight: BOTTOM_SHEET_HEIGHT,
+    overflow: 'hidden',
+  },
+  dragHandle: {
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  dragIndicator: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   dayFilter: {
     marginBottom: Spacing.sm,
+    maxHeight: 44,
   },
   dayFilterContent: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
+    alignItems: 'center',
   },
   dayChip: {
-    paddingVertical: Spacing.xs,
+    paddingVertical: Spacing.xs + 2,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
+    borderWidth: 1.5,
+  },
+  dayChipActive: {
+    backgroundColor: Colors.primary,
   },
   dayChipText: {
     fontSize: FontSizes.sm,
@@ -597,79 +767,102 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
     gap: Spacing.xs,
+  },
+  actionButtonActive: {
+    backgroundColor: Colors.primary,
   },
   actionText: {
     fontSize: FontSizes.sm,
-    fontWeight: FontWeights.medium,
+    fontWeight: FontWeights.semibold,
   },
   selectedCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: Spacing.lg,
-    padding: Spacing.md,
+    marginHorizontal: Spacing.md,
+    padding: Spacing.sm + 2,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
+    borderWidth: 1.5,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
   cardIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.lg,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardContent: {
     flex: 1,
+    marginRight: Spacing.xs,
   },
   cardTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.sm,
     fontWeight: FontWeights.semibold,
   },
   cardLocation: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
     marginTop: 2,
   },
   cardAction: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.primary,
+  },
+  placesListContainer: {
+    flex: 1,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.xs,
   },
   placesList: {
-    paddingHorizontal: Spacing.lg,
+    flex: 1,
+  },
+  placesListContent: {
+    paddingHorizontal: Spacing.md,
   },
   listTitle: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  clearSelection: {
+    fontSize: FontSizes.xs,
     fontWeight: FontWeights.medium,
-    marginBottom: Spacing.sm,
   },
   placeItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
-    borderBottomWidth: 1,
+    borderWidth: 1,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.xs,
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   placeNumber: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -683,11 +876,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   placeTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.sm,
     fontWeight: FontWeights.medium,
   },
   placeLocation: {
     fontSize: FontSizes.xs,
-    marginTop: 2,
+    marginTop: 1,
+  },
+  placeArrow: {
+    width: 24,
+    height: 24,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listFooter: {
+    height: Spacing.lg,
   },
 });

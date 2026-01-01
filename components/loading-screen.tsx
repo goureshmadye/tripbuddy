@@ -99,13 +99,13 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 100,
     height: 100,
-    borderRadius: BorderRadius.xl,
+    borderRadius: BorderRadius.xlarge,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
   },
   appName: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.xl,
   },
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   message: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
   },
   progressContainer: {
@@ -124,15 +124,15 @@ const styles = StyleSheet.create({
   progressBar: {
     width: '100%',
     height: 6,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
   },
   progressText: {
     marginTop: Spacing.sm,
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
 });

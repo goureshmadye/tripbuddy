@@ -1,81 +1,112 @@
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    FlatList,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  FlatList,
+  Image,
+  ImageSourcePropType,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
 interface WalkthroughSlide {
   id: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
+  image: ImageSourcePropType;
   title: string;
   description: string;
+  accentColor: string;
 }
 
-const SLIDES: WalkthroughSlide[] = [
+// All available images for carousel
+const CAROUSEL_IMAGES = [
+  require('@/assets/images/carousel_01.jpg'),
+  require('@/assets/images/carousel_02.jpg'),
+  require('@/assets/images/carousel_03.jpg'),
+  require('@/assets/images/carousel_04.jpg'),
+];
+
+// Slide content (titles and descriptions)
+const SLIDE_CONTENT = [
   {
-    id: '1',
-    icon: 'map-outline',
-    iconColor: Colors.primary,
-    title: 'Plan Visually',
-    description: 'See your entire trip on an interactive map. Organize activities, visualize routes, and never miss a beat.',
+    title: 'Plan Your Adventures',
+    description: 'Create detailed itineraries with maps, activities, and timelines. Everything you need for the perfect trip.',
+    accentColor: Colors.primary,
   },
   {
-    id: '2',
-    icon: 'people-outline',
-    iconColor: Colors.secondary,
-    title: 'Collaborate Seamlessly',
-    description: 'Invite friends and family to plan together in real-time. Everyone can add ideas and vote on activities.',
+    title: 'Travel Together',
+    description: 'Invite friends and family to plan collaboratively. Share ideas, vote on activities, and stay in sync.',
+    accentColor: Colors.secondary,
   },
   {
-    id: '3',
-    icon: 'wallet-outline',
-    iconColor: Colors.accent,
-    title: 'Split Costs Fairly',
-    description: 'Track shared expenses automatically. See who owes what and settle up with just a tap.',
+    title: 'Track Expenses',
+    description: 'Keep track of shared costs effortlessly. Split bills fairly and settle up with a single tap.',
+    accentColor: Colors.accent,
   },
   {
-    id: '4',
-    icon: 'cloud-offline-outline',
-    iconColor: Colors.info,
-    title: 'Work Offline',
-    description: 'Access your itineraries, maps, and documents even without internet. Perfect for international travel.',
+    title: 'Access Anywhere',
+    description: 'Your plans are available offline. Access itineraries, documents, and maps without internet.',
+    accentColor: Colors.info,
   },
 ];
+
+// Fisher-Yates shuffle algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 
 export default function WalkthroughScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { completeWalkthrough } = useAuth();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
+  // Shuffle images on mount - memoize to keep consistent during session
+  const slides: WalkthroughSlide[] = useMemo(() => {
+    const shuffledImages = shuffleArray(CAROUSEL_IMAGES);
+    return SLIDE_CONTENT.map((content, index) => ({
+      id: String(index + 1),
+      image: shuffledImages[index],
+      ...content,
+    }));
+  }, []);
+
+  const handleComplete = async () => {
+    await completeWalkthrough();
+    // Navigate to the auth landing page (sign in / sign up options)
+    router.replace('/auth');
+  };
+
   const handleNext = () => {
-    if (currentIndex < SLIDES.length - 1) {
+    if (currentIndex < slides.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      router.replace('/auth/onboarding');
+      handleComplete();
     }
   };
 
   const handleSkip = () => {
-    router.replace('/auth/onboarding');
+    handleComplete();
   };
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
@@ -86,19 +117,26 @@ export default function WalkthroughScreen() {
 
   const renderSlide = ({ item }: { item: WalkthroughSlide }) => (
     <View style={styles.slide}>
-      <View style={[styles.iconContainer, { backgroundColor: item.iconColor + '15' }]}>
-        <Ionicons name={item.icon} size={80} color={item.iconColor} />
+      <View style={styles.imageContainer}>
+        <Image 
+          source={item.image} 
+          style={styles.slideImage} 
+          resizeMode="cover"
+        />
+        <View style={[styles.imageOverlay, { backgroundColor: item.accentColor + '20' }]} />
       </View>
-      <Text style={[styles.slideTitle, { color: colors.text }]}>{item.title}</Text>
-      <Text style={[styles.slideDescription, { color: colors.textSecondary }]}>
-        {item.description}
-      </Text>
+      <View style={styles.textContainer}>
+        <Text style={[styles.slideTitle, { color: colors.text }]}>{item.title}</Text>
+        <Text style={[styles.slideDescription, { color: colors.textSecondary }]}>
+          {item.description}
+        </Text>
+      </View>
     </View>
   );
 
   const renderPagination = () => (
     <View style={styles.pagination}>
-      {SLIDES.map((_, index) => {
+      {slides.map((_, index) => {
         const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
         
         const dotWidth = scrollX.interpolate({
@@ -131,19 +169,24 @@ export default function WalkthroughScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.placeholder} />
-        <TouchableOpacity onPress={handleSkip}>
-          <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header - overlays the image */}
+      <SafeAreaView style={styles.headerSafeArea}>
+        <View style={styles.header}>
+          <View style={styles.placeholder} />
+          <TouchableOpacity 
+            onPress={handleSkip}
+            style={styles.skipButton}
+          >
+            <Text style={styles.skipText}>Skip</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
       {/* Slides */}
       <FlatList
         ref={flatListRef}
-        data={SLIDES}
+        data={slides}
         renderItem={renderSlide}
         keyExtractor={(item) => item.id}
         horizontal
@@ -156,27 +199,31 @@ export default function WalkthroughScreen() {
         )}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
+        style={styles.flatList}
+        contentContainerStyle={styles.flatListContent}
       />
 
       {/* Pagination */}
       {renderPagination()}
 
       {/* Bottom Button */}
-      <View style={styles.bottomContainer}>
-        <Button
-          title={currentIndex === SLIDES.length - 1 ? "Get Started" : "Next"}
-          onPress={handleNext}
-          fullWidth
-          size="lg"
-          icon={
-            currentIndex === SLIDES.length - 1 
-              ? <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-              : <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-          }
-          iconPosition="right"
-        />
-      </View>
-    </SafeAreaView>
+      <SafeAreaView edges={['bottom']} style={styles.bottomSafeArea}>
+        <View style={styles.bottomContainer}>
+          <Button
+            title={currentIndex === slides.length - 1 ? "Get Started" : "Next"}
+            onPress={handleNext}
+            fullWidth
+            size="lg"
+            icon={
+              currentIndex === slides.length - 1 
+                ? <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                : <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+            }
+            iconPosition="right"
+          />
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -184,43 +231,71 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  headerSafeArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
   },
   placeholder: {
-    width: 40,
+    width: 60,
+  },
+  skipButton: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.medium,
   },
   skipText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
+    color: '#FFFFFF',
+  },
+  flatList: {
+    flex: 1,
+  },
+  flatListContent: {
   },
   slide: {
     width,
+    flex: 1,
+  },
+  imageContainer: {
+    width: width,
+    height: height * 0.55,
+    position: 'relative',
+  },
+  slideImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.3,
+  },
+  textContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
-    paddingTop: height * 0.08,
-  },
-  iconContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xxl,
+    paddingTop: Spacing.xl,
   },
   slideTitle: {
-    fontSize: FontSizes.xxxl,
+    fontSize: FontSizes.heading1,
     fontWeight: FontWeights.bold,
     textAlign: 'center',
     marginBottom: Spacing.md,
   },
   slideDescription: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: Spacing.md,
@@ -230,14 +305,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.sm,
-    paddingVertical: Spacing.xl,
+    paddingVertical: Spacing.lg,
   },
   dot: {
     height: 8,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
+  },
+  bottomSafeArea: {
   },
   bottomContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing.md,
   },
 });

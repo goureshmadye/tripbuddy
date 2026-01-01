@@ -1,11 +1,13 @@
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTripItinerary } from '@/hooks/use-trips';
 import { ItineraryCategory, ItineraryItem } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Dimensions,
     SafeAreaView,
     ScrollView,
@@ -35,7 +37,7 @@ export default function ItineraryScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [items, setItems] = useState<ItineraryItem[]>([]);
+  const { items, loading, error } = useTripItinerary(id);
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [selectedDay, setSelectedDay] = useState(0);
 
@@ -87,12 +89,7 @@ export default function ItineraryScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Itinerary</Text>
         <TouchableOpacity
           onPress={handleAddItem}
@@ -194,7 +191,20 @@ export default function ItineraryScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {items.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading itinerary...</Text>
+          </View>
+        ) : error ? (
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Failed to load itinerary"
+            description={error.message || "Something went wrong. Please try again."}
+            actionLabel="Retry"
+            onAction={() => router.replace(`/trips/${id}/itinerary`)}
+          />
+        ) : items.length === 0 ? (
           <EmptyState
             icon="calendar-outline"
             title="No activities yet"
@@ -320,15 +330,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingVertical: Spacing.md,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,
@@ -337,13 +344,13 @@ const styles = StyleSheet.create({
   addButton: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     alignItems: 'center',
     justifyContent: 'center',
   },
   viewToggle: {
     flexDirection: 'row',
-    marginHorizontal: Spacing.lg,
+    marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.md,
     gap: Spacing.sm,
   },
@@ -352,11 +359,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     gap: Spacing.xs,
   },
   toggleText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   dayTabs: {
@@ -364,30 +371,30 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   dayTabsContent: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
   },
   dayTab: {
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     borderWidth: 1,
     alignItems: 'center',
     minWidth: 80,
   },
   dayNumber: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.semibold,
   },
   dayDate: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl + Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['3xl'] + Spacing.xl,
   },
   timeline: {
     paddingTop: Spacing.sm,
@@ -403,7 +410,7 @@ const styles = StyleSheet.create({
   timelineDot: {
     width: 32,
     height: 32,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -414,24 +421,24 @@ const styles = StyleSheet.create({
   },
   timelineContent: {
     flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
   },
   timelineHeader: {
     marginBottom: Spacing.xs,
   },
   itemTime: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.semibold,
   },
   itemTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
     marginBottom: 4,
   },
   itemDescription: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     lineHeight: 20,
     marginBottom: Spacing.xs,
   },
@@ -441,25 +448,25 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   locationText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   locationTextSmall: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
   },
   listView: {
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
   },
   listIcon: {
     width: 48,
     height: 48,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
@@ -470,12 +477,22 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: Spacing.xl,
-    right: Spacing.lg,
+    right: Spacing.screenPadding,
     width: 56,
     height: 56,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing['3xl'],
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: FontSizes.body,
   },
 });

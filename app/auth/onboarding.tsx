@@ -1,22 +1,24 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { validateName } from '@/utils/validation';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const CURRENCIES = [
@@ -45,15 +47,49 @@ export default function OnboardingScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { user, updateProfile, uploadProfilePhoto, completeOnboarding } = useAuth();
 
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
+  const [nameError, setNameError] = useState('');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [selectedCountry, setSelectedCountry] = useState('');
   const [loading, setLoading] = useState(false);
 
   const totalSteps = 4;
+
+  // Validate name when it changes
+  const handleNameChange = (text: string) => {
+    setName(text);
+    if (text.trim()) {
+      const validation = validateName(text);
+      setNameError(validation.isValid ? '' : validation.error || '');
+    } else {
+      setNameError('');
+    }
+  };
+
+  const isNameValid = () => {
+    const validation = validateName(name);
+    return validation.isValid;
+  };
+
+  // Initialize name from user profile if available
+  useEffect(() => {
+    if (user?.name) {
+      setName(user.name);
+    }
+    if (user?.profilePhoto) {
+      setProfilePhoto(user.profilePhoto);
+    }
+    if (user?.defaultCurrency) {
+      setSelectedCurrency(user.defaultCurrency);
+    }
+    if (user?.homeCountry) {
+      setSelectedCountry(user.homeCountry);
+    }
+  }, [user]);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -105,8 +141,14 @@ export default function OnboardingScreen() {
   };
 
   const handleNext = () => {
-    if (step === 1 && !name.trim()) {
-      return;
+    if (step === 1) {
+      if (!name.trim()) {
+        setNameError('Name is required');
+        return;
+      }
+      if (!isNameValid()) {
+        return;
+      }
     }
     if (step < totalSteps) {
       setStep(step + 1);
@@ -122,18 +164,46 @@ export default function OnboardingScreen() {
   const handleComplete = async () => {
     setLoading(true);
     try {
-      // TODO: Save user preferences and photo to Firestore
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Upload profile photo if selected (and not already a URL)
+      let photoUrl = profilePhoto;
+      if (profilePhoto && !profilePhoto.startsWith('http')) {
+        try {
+          photoUrl = await uploadProfilePhoto(profilePhoto);
+        } catch (error) {
+          console.error('Failed to upload photo:', error);
+          // Continue without photo - don't block completion
+        }
+      }
+
+      // Save user preferences to Firestore
+      await updateProfile({
+        name: name.trim(),
+        profilePhoto: photoUrl,
+        defaultCurrency: selectedCurrency,
+        homeCountry: selectedCountry || null,
+      });
+
+      // Mark onboarding as complete
+      await completeOnboarding();
+      
       router.replace('/(tabs)');
     } catch (error) {
       console.error('Onboarding error:', error);
+      Alert.alert('Error', 'Failed to save your profile. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSkip = () => {
-    router.replace('/(tabs)');
+  const handleSkip = async () => {
+    try {
+      // Save minimal data and mark onboarding complete
+      await completeOnboarding();
+      router.replace('/(tabs)');
+    } catch (error) {
+      // Still navigate even if marking complete fails
+      router.replace('/(tabs)');
+    }
   };
 
   const renderStep = () => {
@@ -151,11 +221,15 @@ export default function OnboardingScreen() {
             <Input
               placeholder="Enter your name"
               value={name}
-              onChangeText={setName}
+              onChangeText={handleNameChange}
               autoCapitalize="words"
               autoFocus
               containerStyle={{ marginTop: Spacing.lg, width: '100%' }}
+              error={nameError}
             />
+            <Text style={[styles.nameHint, { color: colors.textMuted }]}>
+              Use letters only, at least 2 characters
+            </Text>
           </View>
         );
 
@@ -314,16 +388,7 @@ export default function OnboardingScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          {step > 1 ? (
-            <TouchableOpacity
-              onPress={handleBack}
-              style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.placeholder} />
-          )}
+          <View style={styles.placeholder} />
           
           <TouchableOpacity onPress={handleSkip}>
             <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
@@ -355,7 +420,7 @@ export default function OnboardingScreen() {
             title={step === totalSteps ? "Get Started" : "Continue"}
             onPress={step === totalSteps ? handleComplete : handleNext}
             loading={loading}
-            disabled={step === 1 && !name.trim()}
+            disabled={step === 1 && (!name.trim() || !isNameValid())}
             fullWidth
             size="lg"
             icon={step === totalSteps ? <Ionicons name="checkmark" size={20} color="#FFFFFF" /> : undefined}
@@ -377,22 +442,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
   },
-  backButton: {
+  headerPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   placeholder: {
     width: 40,
     height: 40,
   },
   skipText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
   },
   progressContainer: {
@@ -405,29 +467,29 @@ const styles = StyleSheet.create({
   },
   progressDot: {
     height: 8,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
   },
   stepContent: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     alignItems: 'center',
   },
   iconContainer: {
     width: 80,
     height: 80,
-    borderRadius: BorderRadius.xxl,
+    borderRadius: BorderRadius.xxlarge,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
   },
   stepTitle: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   stepSubtitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -453,7 +515,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   photoText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   changePhotoButton: {
@@ -463,11 +525,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   changePhotoText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   optionalText: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     marginTop: Spacing.lg,
   },
   optionsList: {
@@ -479,8 +541,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.large,
     borderWidth: 1.5,
     marginBottom: Spacing.sm,
   },
@@ -490,19 +552,24 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   currencySymbol: {
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
     width: 30,
     textAlign: 'center',
   },
   optionTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
   },
   optionSubtitle: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   bottomButtons: {
-    padding: Spacing.lg,
+    padding: Spacing.screenPadding,
+  },
+  nameHint: {
+    fontSize: FontSizes.caption,
+    marginTop: Spacing.sm,
+    textAlign: 'center',
   },
 });

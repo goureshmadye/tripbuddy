@@ -1,12 +1,17 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTrip } from '@/hooks/use-trips';
+import { createItineraryItem } from '@/services/firestore';
+import { notifyItineraryAdded } from '@/services/notifications';
 import { ItineraryCategory } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
@@ -29,6 +34,8 @@ const CATEGORIES: { id: ItineraryCategory; label: string; icon: keyof typeof Ion
 export default function AddItineraryItemScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const { trip } = useTrip(id);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
@@ -43,19 +50,68 @@ export default function AddItineraryItemScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string }>({});
 
+  const parseDateTime = (dateStr: string, timeStr: string): Date | null => {
+    if (!dateStr) return null;
+    try {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      if (timeStr) {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return new Date(year, month - 1, day, hours, minutes);
+      }
+      return new Date(year, month - 1, day);
+    } catch {
+      return null;
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       setErrors({ title: 'Title is required' });
       return;
     }
+
+    if (!id) {
+      Alert.alert('Error', 'Trip ID is missing');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to add activities');
+      return;
+    }
     
     setLoading(true);
     try {
-      // TODO: Save to Firestore
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const startDateTime = parseDateTime(date, startTime);
+      const endDateTime = parseDateTime(date, endTime);
+
+      const itineraryId = await createItineraryItem({
+        tripId: id,
+        title: title.trim(),
+        description: description.trim() || null,
+        location: location.trim() || null,
+        category,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        addedBy: user.id,
+        latitude: null,
+        longitude: null,
+      });
+
+      // Notify collaborators about the new activity
+      notifyItineraryAdded(
+        id,
+        trip?.title || 'Trip',
+        itineraryId,
+        title.trim(),
+        user.id,
+        user.name
+      ).catch(console.error); // Don't block on notification
+      
       router.back();
     } catch (error) {
       console.error('Save error:', error);
+      Alert.alert('Error', 'Failed to save activity. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -69,12 +125,7 @@ export default function AddItineraryItemScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
           <Text style={[styles.headerTitle, { color: colors.text }]}>Add Activity</Text>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -223,15 +274,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingVertical: Spacing.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: FontSizes.lg,
@@ -244,14 +288,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['2xl'],
   },
   section: {
     marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
     marginBottom: Spacing.sm,
   },
@@ -264,12 +308,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
     borderWidth: 1.5,
     gap: Spacing.xs,
   },
   categoryLabel: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   timeRow: {
@@ -284,16 +328,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     gap: Spacing.sm,
   },
   attachText: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
   },
   bottomContainer: {
-    padding: Spacing.lg,
+    padding: Spacing.screenPadding,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.05)',
   },

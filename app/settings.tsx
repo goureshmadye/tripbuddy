@@ -1,28 +1,24 @@
+import LoadingScreen from '@/components/loading-screen';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth } from '@/hooks/use-auth';
+import { useSettings } from '@/hooks/use-settings';
+import { useAppColorScheme, useTheme } from '@/hooks/use-theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-interface User {
-  name: string;
-  email: string;
-  photoUrl: string | null;
-  currency: string;
-  country: string;
-}
 
 type SettingItem = {
   id: string;
@@ -35,65 +31,76 @@ type SettingItem = {
   danger?: boolean;
 };
 
+const THEME_OPTIONS = [
+  { id: 'light', label: 'Light', icon: 'sunny-outline' as keyof typeof Ionicons.glyphMap },
+  { id: 'dark', label: 'Dark', icon: 'moon-outline' as keyof typeof Ionicons.glyphMap },
+  { id: 'system', label: 'System', icon: 'phone-portrait-outline' as keyof typeof Ionicons.glyphMap },
+];
+
 export default function SettingsScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const colorScheme = useAppColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [offlineMode, setOfflineMode] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
-  const [currentPlan, setCurrentPlan] = useState<'free' | 'pro' | 'premium'>('free');
-  const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
+  const { signOutUser, isGuestMode, disableGuestMode, firebaseUser, loading, isWalkthroughComplete } = useAuth();
+  
+  // Auth guard
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+  
+  if (!firebaseUser && !isGuestMode) {
+    if (!isWalkthroughComplete) {
+      return <Redirect href="/auth/walkthrough" />;
+    }
+    return <Redirect href="/auth" />;
+  }
+
+  const { themeMode, setThemeMode } = useTheme();
+  const {
+    pushNotifications,
+    emailNotifications,
+    offlineMode,
+    setPushNotifications,
+    setEmailNotifications,
+    setOfflineMode,
+    syncData,
+    clearCache,
+    isSyncing,
+    isClearing,
+  } = useSettings();
+
+  // Modal state
   const [themeModalVisible, setThemeModalVisible] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-
-  const SUBSCRIPTION_PLANS = [
-    {
-      id: 'free',
-      name: 'Free',
-      price: '$0/month',
-      features: ['Up to 3 trips', 'Basic expense tracking', '2 collaborators per trip'],
-    },
-    {
-      id: 'pro',
-      name: 'Pro',
-      price: '$4.99/month',
-      features: ['Unlimited trips', 'Advanced expense splitting', '10 collaborators per trip', 'Offline mode'],
-    },
-    {
-      id: 'premium',
-      name: 'Premium',
-      price: '$9.99/month',
-      features: ['Everything in Pro', 'Unlimited collaborators', 'Priority support', 'AI trip suggestions'],
-    },
-  ];
-
-  const THEME_OPTIONS = [
-    { id: 'light', label: 'Light', icon: 'sunny-outline' as keyof typeof Ionicons.glyphMap },
-    { id: 'dark', label: 'Dark', icon: 'moon-outline' as keyof typeof Ionicons.glyphMap },
-    { id: 'system', label: 'System', icon: 'phone-portrait-outline' as keyof typeof Ionicons.glyphMap },
-  ];
-
-  const getPlanLabel = () => {
-    const plan = SUBSCRIPTION_PLANS.find(p => p.id === currentPlan);
-    return plan ? `${plan.name} Plan` : 'Free Plan';
-  };
 
   const getThemeLabel = () => {
-    const option = THEME_OPTIONS.find(o => o.id === theme);
+    const option = THEME_OPTIONS.find(o => o.id === themeMode);
     return option ? option.label : 'System';
   };
 
   const handleLogout = () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      isGuestMode ? 'Exit Guest Mode' : 'Sign Out',
+      isGuestMode ? 'Are you sure you want to exit guest mode?' : 'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => router.replace('/auth') },
+        {
+          text: isGuestMode ? 'Exit' : 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isGuestMode) {
+                await disableGuestMode();
+              } else {
+                await signOutUser();
+              }
+              router.replace('/auth');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          }
+        },
       ]
     );
   };
@@ -111,20 +118,6 @@ export default function SettingsScreen() {
 
   const settingSections: { title: string; items: SettingItem[] }[] = [
     {
-      title: 'Subscription',
-      items: [
-        { id: 'subscription', icon: 'diamond-outline', label: 'Subscription Plan', value: getPlanLabel(), type: 'navigation', color: Colors.accent },
-      ],
-    },
-    {
-      title: 'Account',
-      items: [
-        { id: 'profile', icon: 'person-outline', label: 'Edit Profile', type: 'navigation' },
-        { id: 'currency', icon: 'cash-outline', label: 'Default Currency', value: user?.currency ?? 'USD', type: 'navigation' },
-        { id: 'country', icon: 'globe-outline', label: 'Country', value: user?.country ?? 'Not set', type: 'navigation' },
-      ],
-    },
-    {
       title: 'Appearance',
       items: [
         { id: 'theme', icon: 'color-palette-outline', label: 'App Theme', value: getThemeLabel(), type: 'navigation' },
@@ -140,9 +133,9 @@ export default function SettingsScreen() {
     {
       title: 'Data & Storage',
       items: [
-        { id: 'offline', icon: 'cloud-offline-outline', label: 'Offline Mode', description: 'Access your trips without internet connection', type: 'toggle' },
-        { id: 'sync', icon: 'sync-outline', label: 'Sync Now', type: 'navigation' },
-        { id: 'cache', icon: 'trash-outline', label: 'Clear Cache', type: 'navigation' },
+        { id: 'offline', icon: 'cloud-offline-outline', label: 'Offline Mode', description: 'Access your trips without internet', type: 'toggle' },
+        { id: 'sync', icon: 'sync-outline', label: isSyncing ? 'Syncing...' : 'Sync Now', type: 'navigation' },
+        { id: 'cache', icon: 'trash-outline', label: isClearing ? 'Clearing...' : 'Clear Cache', type: 'navigation' },
       ],
     },
     {
@@ -187,11 +180,8 @@ export default function SettingsScreen() {
 
   const handleItemPress = (item: SettingItem) => {
     if (item.type === 'toggle') return;
-    
+
     switch (item.id) {
-      case 'subscription':
-        setSubscriptionModalVisible(true);
-        break;
       case 'theme':
         setThemeModalVisible(true);
         break;
@@ -199,13 +189,25 @@ export default function SettingsScreen() {
         handleDeleteAccount();
         break;
       case 'sync':
-        Alert.alert('Syncing...', 'Your data is being synchronized.');
+        if (!isSyncing) {
+          syncData();
+        }
         break;
       case 'cache':
-        Alert.alert('Cache Cleared', 'All cached data has been removed.');
+        Alert.alert(
+          'Clear Cache',
+          'This will remove all cached data. Are you sure?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Clear', 
+              style: 'destructive',
+              onPress: () => clearCache()
+            },
+          ]
+        );
         break;
       default:
-        // Navigate to respective screen
         break;
     }
   };
@@ -214,10 +216,7 @@ export default function SettingsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-        >
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
@@ -229,24 +228,6 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Card */}
-        <TouchableOpacity
-          style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.avatar, { backgroundColor: Colors.primary + '20' }]}>
-            <Text style={[styles.avatarText, { color: Colors.primary }]}>
-              {user?.name?.charAt(0) ?? '?'}
-            </Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: colors.text }]}>{user?.name ?? 'Guest User'}</Text>
-            <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>{user?.email ?? 'Not signed in'}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        {/* Settings Sections */}
         {settingSections.map((section) => (
           <View key={section.title} style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
@@ -268,11 +249,15 @@ export default function SettingsScreen() {
                     styles.settingIcon,
                     { backgroundColor: item.danger ? Colors.error + '15' : (item.color ? item.color + '15' : Colors.primary + '15') },
                   ]}>
-                    <Ionicons 
-                      name={item.icon} 
-                      size={20} 
-                      color={item.danger ? Colors.error : (item.color || Colors.primary)} 
-                    />
+                    {(item.id === 'sync' && isSyncing) || (item.id === 'cache' && isClearing) ? (
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                    ) : (
+                      <Ionicons
+                        name={item.icon}
+                        size={20}
+                        color={item.danger ? Colors.error : (item.color || Colors.primary)}
+                      />
+                    )}
                   </View>
                   <View style={styles.settingLabelContainer}>
                     <Text style={[
@@ -285,7 +270,7 @@ export default function SettingsScreen() {
                       </Text>
                     )}
                   </View>
-                  
+
                   {item.type === 'toggle' ? (
                     <Switch
                       value={getToggleValue(item.id)}
@@ -300,7 +285,9 @@ export default function SettingsScreen() {
                           {item.value}
                         </Text>
                       )}
-                      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                      {(item.id === 'sync' && isSyncing) || (item.id === 'cache' && isClearing) ? null : (
+                        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                      )}
                     </View>
                   )}
                 </TouchableOpacity>
@@ -312,7 +299,7 @@ export default function SettingsScreen() {
         {/* Sign Out Button */}
         <View style={styles.signOutSection}>
           <Button
-            title="Sign Out"
+            title={isGuestMode ? "Exit Guest Mode" : "Sign Out"}
             onPress={handleLogout}
             variant="outline"
             fullWidth
@@ -325,69 +312,6 @@ export default function SettingsScreen() {
           TripBuddy v1.0.0
         </Text>
       </ScrollView>
-
-      {/* Subscription Modal */}
-      <Modal
-        visible={subscriptionModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setSubscriptionModalVisible(false)}
-      >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Subscription Plans</Text>
-            <TouchableOpacity onPress={() => setSubscriptionModalVisible(false)}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            {SUBSCRIPTION_PLANS.map((plan) => (
-              <TouchableOpacity
-                key={plan.id}
-                style={[
-                  styles.planCard,
-                  { 
-                    backgroundColor: colors.card, 
-                    borderColor: currentPlan === plan.id ? Colors.primary : colors.border,
-                    borderWidth: currentPlan === plan.id ? 2 : 1,
-                  },
-                ]}
-                onPress={() => setCurrentPlan(plan.id as 'free' | 'pro' | 'premium')}
-              >
-                <View style={styles.planHeader}>
-                  <View>
-                    <Text style={[styles.planName, { color: colors.text }]}>{plan.name}</Text>
-                    <Text style={[styles.planPrice, { color: Colors.primary }]}>{plan.price}</Text>
-                  </View>
-                  {currentPlan === plan.id && (
-                    <View style={[styles.currentBadge, { backgroundColor: Colors.primary }]}>
-                      <Text style={styles.currentBadgeText}>Current</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.planFeatures}>
-                  {plan.features.map((feature, index) => (
-                    <View key={index} style={styles.featureRow}>
-                      <Ionicons name="checkmark-circle" size={18} color={Colors.secondary} />
-                      <Text style={[styles.featureText, { color: colors.textSecondary }]}>{feature}</Text>
-                    </View>
-                  ))}
-                </View>
-                {currentPlan !== plan.id && (
-                  <Button
-                    title={`Upgrade to ${plan.name}`}
-                    onPress={() => {
-                      setCurrentPlan(plan.id as 'free' | 'pro' | 'premium');
-                      Alert.alert('Success', `You've upgraded to ${plan.name} plan!`);
-                    }}
-                    fullWidth
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
 
       {/* Theme Modal */}
       <Modal
@@ -411,7 +335,7 @@ export default function SettingsScreen() {
                   { borderBottomColor: colors.border },
                 ]}
                 onPress={() => {
-                  setTheme(option.id as 'light' | 'dark' | 'system');
+                  setThemeMode(option.id as 'light' | 'dark' | 'system');
                   setThemeModalVisible(false);
                 }}
               >
@@ -419,7 +343,7 @@ export default function SettingsScreen() {
                   <Ionicons name={option.icon} size={22} color={colors.text} />
                   <Text style={[styles.themeOptionLabel, { color: colors.text }]}>{option.label}</Text>
                 </View>
-                {theme === option.id && (
+                {themeMode === option.id && (
                   <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
                 )}
               </TouchableOpacity>
@@ -439,66 +363,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingVertical: Spacing.md,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.lg,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.semibold,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 44,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    marginBottom: Spacing.lg,
-    gap: Spacing.md,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-  },
-  profileEmail: {
-    fontSize: FontSizes.sm,
-    marginTop: 2,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['2xl'],
   },
   section: {
     marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.caption,
     fontWeight: FontWeights.medium,
     marginBottom: Spacing.sm,
     marginLeft: Spacing.xs,
@@ -506,20 +398,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionContent: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     borderWidth: 1,
     overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
+    padding: Spacing.cardPadding,
     gap: Spacing.md,
   },
   settingIcon: {
     width: 36,
     height: 36,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -527,11 +419,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   settingLabel: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
   },
   settingDescription: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
     marginTop: 2,
   },
   settingRight: {
@@ -540,7 +432,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   settingValue: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   signOutSection: {
     marginTop: Spacing.md,
@@ -548,84 +440,22 @@ const styles = StyleSheet.create({
   },
   version: {
     textAlign: 'center',
-    fontSize: FontSizes.sm,
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  modalTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.semibold,
-  },
-  modalContent: {
-    flex: 1,
-    padding: Spacing.lg,
-  },
-  planCard: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  planHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.md,
-  },
-  planName: {
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-  },
-  planPrice: {
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.semibold,
-    marginTop: Spacing.xs,
-  },
-  currentBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-  },
-  currentBadgeText: {
-    color: '#FFFFFF',
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.semibold,
-  },
-  planFeatures: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  featureText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   themeModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Spacing.lg,
+    padding: Spacing.screenPadding,
   },
   themeModalContent: {
     width: '100%',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+    borderRadius: BorderRadius.modal,
+    padding: Spacing.cardPadding,
   },
   themeModalTitle: {
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.semibold,
     marginBottom: Spacing.md,
   },
@@ -642,7 +472,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   themeOptionLabel: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
   },
 });

@@ -1,12 +1,15 @@
 import { TripCard } from '@/components/trips/trip-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Trip } from '@/types/database';
+import { useTrips } from '@/hooks/use-trips';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Modal,
     RefreshControl,
     SafeAreaView,
@@ -24,7 +27,9 @@ export default function MyTripsScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const { user } = useAuth();
+  const { trips, loading, error, refresh } = useTrips();
+  
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [joinModalVisible, setJoinModalVisible] = useState(false);
@@ -33,10 +38,11 @@ export default function MyTripsScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // TODO: Fetch trips from Firestore
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    refresh();
+    // Small delay for visual feedback
+    await new Promise(resolve => setTimeout(resolve, 500));
     setRefreshing(false);
-  }, []);
+  }, [refresh]);
 
   const filteredTrips = trips.filter((trip) => {
     const now = new Date();
@@ -69,25 +75,52 @@ export default function MyTripsScreen() {
 
     setJoiningTrip(true);
     try {
-      // TODO: Validate and join trip via Firestore
+      // TODO: Implement trip code joining via Firestore
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Simulate success
       Alert.alert(
         'Success!',
         'You\'ve joined the trip successfully.',
         [{ text: 'OK', onPress: () => {
           setJoinModalVisible(false);
           setTripCode('');
-          // TODO: Navigate to the joined trip
         }}]
       );
-    } catch (error) {
+    } catch (err) {
       Alert.alert('Error', 'Invalid trip code. Please check and try again.');
     } finally {
       setJoiningTrip(false);
     }
   };
+
+  // Show loading state
+  if (loading && trips.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading your trips...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Something went wrong"
+          description={error.message || "Failed to load trips. Please try again."}
+          actionLabel="Retry"
+          onAction={onRefresh}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -97,14 +130,10 @@ export default function MyTripsScreen() {
           <Text style={[styles.greeting, { color: colors.textSecondary }]}>
             Welcome back,
           </Text>
-          <Text style={[styles.userName, { color: colors.text }]}>Traveler! 👋</Text>
+          <Text style={[styles.userName, { color: colors.text }]}>
+            {user?.name || 'Traveler'}! 👋
+          </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.profileButton, { backgroundColor: colors.backgroundSecondary }]}
-          onPress={() => router.push('/settings')}
-        >
-          <Ionicons name="person-outline" size={24} color={colors.text} />
-        </TouchableOpacity>
       </View>
 
       {/* Action Buttons - New Trip + Join with Code */}
@@ -141,8 +170,10 @@ export default function MyTripsScreen() {
         </View>
         <View style={[styles.statCard, { backgroundColor: Colors.accent + '15' }]}>
           <Ionicons name="people" size={24} color={Colors.accent} />
-          <Text style={[styles.statNumber, { color: colors.text }]}>5</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Friends</Text>
+          <Text style={[styles.statNumber, { color: colors.text }]}>
+            {trips.filter(t => new Date(t.endDate) < new Date()).length}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Completed</Text>
         </View>
       </View>
 
@@ -267,27 +298,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
   },
   greeting: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   userName: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
-  },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
@@ -298,16 +322,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.xs,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.button,
   },
   actionButtonText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.semibold,
     color: '#FFFFFF',
   },
   statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
@@ -315,37 +339,37 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     gap: 4,
   },
   statNumber: {
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
   },
   statLabel: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
   filterTab: {
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
   },
   filterText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   tripsList: {
     flex: 1,
   },
   tripsListContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl + Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['3xl'] + Spacing.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -354,7 +378,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   sectionTitle: {
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.semibold,
   },
   modalOverlay: {
@@ -363,10 +387,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
+    borderTopLeftRadius: BorderRadius.modal,
+    borderTopRightRadius: BorderRadius.modal,
+    padding: Spacing.screenPadding,
+    paddingBottom: Spacing['3xl'],
   },
   modalHeader: {
     flexDirection: 'row',
@@ -375,11 +399,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   modalTitle: {
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
   },
   modalDescription: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     marginBottom: Spacing.lg,
     lineHeight: 22,
   },
@@ -387,15 +411,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.input,
     borderWidth: 1,
     marginBottom: Spacing.lg,
   },
   codeInput: {
     flex: 1,
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.semibold,
     letterSpacing: 2,
   },
@@ -406,11 +430,20 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.button,
   },
   joinButtonText: {
     color: '#FFFFFF',
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  loadingText: {
+    fontSize: FontSizes.body,
   },
 });

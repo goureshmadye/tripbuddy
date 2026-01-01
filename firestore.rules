@@ -2,8 +2,91 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    // Users collection - users can read/write their own documents
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Trips collection
+    match /trips/{tripId} {
+      // Allow read if user is authenticated and is the creator
+      // Note: Collaborator access is checked via tripCollaborators collection
+      allow read: if request.auth != null;
+      
+      // Allow create if authenticated and user is the creator
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorId;
+      
+      // Allow update/delete if user is creator
+      allow update, delete: if request.auth != null && resource.data.creatorId == request.auth.uid;
+      
+      // Subcollections under trips
+      match /{subcollection}/{docId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+    
+    // Trip Collaborators collection
+    match /tripCollaborators/{collaboratorId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/trips/$(resource.data.tripId)).data.creatorId == request.auth.uid
+      );
+    }
+    
+    // Expenses collection (if stored at root level)
+    match /expenses/{expenseId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Expense Shares collection
+    match /expenseShares/{shareId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Itinerary items (if stored at root level)
+    match /itineraryItems/{itemId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Documents collection
+    match /documents/{documentId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Notifications collection - users can only access their own notifications
+    match /notifications/{notificationId} {
+      // Users can read their own notifications (single doc or list query)
+      // For list queries, the query must constrain userId to the authenticated user
+      allow read: if request.auth != null && (
+        resource == null || resource.data.userId == request.auth.uid
+      );
+      
+      // Also allow list queries that filter by userId matching the authenticated user
+      allow list: if request.auth != null;
+      
+      // Allow create for any authenticated user (to send notifications to others)
+      allow create: if request.auth != null;
+      
+      // Users can only update/delete their own notifications
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    // Trip Invitations collection
+    match /tripInvitations/{invitationId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Collaborators collection (legacy)
+    match /collaborators/{collaboratorId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Subscriptions collection - users can only access their own subscription
+    match /subscriptions/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

@@ -1,32 +1,40 @@
+import { PlanBadge } from '@/components/subscription';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSubscription } from '@/hooks/use-subscription';
+import { useTrips } from '@/hooks/use-trips';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  photoUrl: string | null;
-  currency: string;
-  country: string;
-  memberSince: string;
-  tripsCount: number;
-  countriesVisited: number;
-}
+// Currency and country mapping
+const CURRENCY_COUNTRY_MAP: Record<string, { country: string; currency: string }> = {
+  USD: { country: 'United States', currency: 'USD' },
+  EUR: { country: 'Europe', currency: 'EUR' },
+  GBP: { country: 'United Kingdom', currency: 'GBP' },
+  INR: { country: 'India', currency: 'INR' },
+  JPY: { country: 'Japan', currency: 'JPY' },
+  AUD: { country: 'Australia', currency: 'AUD' },
+  CAD: { country: 'Canada', currency: 'CAD' },
+  CNY: { country: 'China', currency: 'CNY' },
+  KRW: { country: 'South Korea', currency: 'KRW' },
+  SGD: { country: 'Singapore', currency: 'SGD' },
+  BRL: { country: 'Brazil', currency: 'BRL' },
+  MXN: { country: 'Mexico', currency: 'MXN' },
+};
 
 interface StatItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -49,20 +57,30 @@ export default function ProfileScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, signOutUser, isGuestMode, disableGuestMode } = useAuth();
+  const { trips } = useTrips();
+  const { plan, planInfo, limits, daysUntilRenewal, isFree, subscription } = useSubscription();
 
-  // Simulate loading state - in real app, fetch user data here
-  React.useEffect(() => {
-    // TODO: Fetch user data from Firebase
-    setLoading(false);
-  }, []);
+  // Calculate stats from real data
+  const memberSince = user?.createdAt 
+    ? new Date(user.createdAt).getFullYear().toString()
+    : new Date().getFullYear().toString();
 
   const stats: StatItem[] = user ? [
-    { icon: 'airplane', value: user.tripsCount, label: 'Trips', color: Colors.primary },
-    { icon: 'globe', value: user.countriesVisited, label: 'Countries', color: Colors.secondary },
-    { icon: 'calendar', value: user.memberSince, label: 'Member Since', color: Colors.accent },
+    { icon: 'airplane', value: trips.length, label: 'Trips', color: Colors.primary },
+    { icon: 'globe', value: trips.filter(t => new Date(t.endDate) < new Date()).length, label: 'Completed', color: Colors.secondary },
+    { icon: 'calendar', value: memberSince, label: 'Member Since', color: Colors.accent },
   ] : [];
+
+  // Get location display text
+  const getLocationDisplay = () => {
+    const currency = user?.defaultCurrency || 'USD';
+    const mapping = CURRENCY_COUNTRY_MAP[currency];
+    if (mapping) {
+      return `${mapping.country} · ${mapping.currency}`;
+    }
+    return currency;
+  };
 
   const quickActions: QuickAction[] = [
     {
@@ -70,7 +88,7 @@ export default function ProfileScreen() {
       icon: 'person-outline',
       label: 'Edit Profile',
       color: Colors.primary,
-      onPress: () => router.push('/settings'),
+      onPress: () => router.push('/edit-profile'),
     },
     {
       id: 'my-trips',
@@ -101,7 +119,19 @@ export default function ProfileScreen() {
       'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => router.replace('/auth') },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await signOutUser();
+              await disableGuestMode();
+              router.replace('/auth');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          }
+        },
       ]
     );
   };
@@ -116,22 +146,43 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!user) {
+  // Guest mode UI
+  if (isGuestMode || !user) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.emptyContainer}>
           <View style={[styles.emptyIcon, { backgroundColor: Colors.primary + '10' }]}>
             <Ionicons name="person-outline" size={48} color={Colors.primary} />
           </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Not Signed In</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            {isGuestMode ? 'Guest Mode' : 'Not Signed In'}
+          </Text>
           <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
-            Sign in to view your profile and trip history.
+            {isGuestMode 
+              ? 'You\'re using TripBuddy as a guest. Sign in to sync your trips across devices and unlock all features.'
+              : 'Sign in to view your profile and trip history.'}
           </Text>
           <Button
             title="Sign In"
-            onPress={() => router.replace('/auth')}
+            onPress={async () => {
+              if (isGuestMode) {
+                await disableGuestMode();
+              }
+              router.replace('/auth');
+            }}
             style={{ marginTop: Spacing.lg }}
           />
+          {isGuestMode && (
+            <Button
+              title="Create Account"
+              variant="outline"
+              onPress={async () => {
+                await disableGuestMode();
+                router.replace('/auth/signup');
+              }}
+              style={{ marginTop: Spacing.sm }}
+            />
+          )}
         </View>
       </SafeAreaView>
     );
@@ -147,8 +198,8 @@ export default function ProfileScreen() {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={[styles.avatarContainer, Shadows.md]}>
-            {user.photoUrl ? (
-              <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
+            {user.profilePhoto ? (
+              <Image source={{ uri: user.profilePhoto }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatarPlaceholder, { backgroundColor: Colors.primary + '20' }]}>
                 <Text style={[styles.avatarText, { color: Colors.primary }]}>
@@ -158,18 +209,19 @@ export default function ProfileScreen() {
             )}
             <TouchableOpacity
               style={[styles.editAvatarButton, { backgroundColor: Colors.primary }]}
-              onPress={() => router.push('/settings')}
+              onPress={() => router.push('/edit-profile')}
             >
               <Ionicons name="camera" size={14} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
           <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
-          <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{user.email}</Text>
 
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.locationText, { color: colors.textMuted }]}>{user.country}</Text>
+            <Text style={[styles.locationText, { color: colors.textMuted }]}>
+              {getLocationDisplay()}
+            </Text>
           </View>
         </View>
 
@@ -191,6 +243,37 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {/* Subscription Card */}
+        <TouchableOpacity
+          style={[styles.subscriptionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => router.push('/subscription')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.subscriptionContent}>
+            <View style={[styles.subscriptionIcon, { backgroundColor: Colors.primary + '15' }]}>
+              <Ionicons name="diamond" size={24} color={Colors.primary} />
+            </View>
+            <View style={styles.subscriptionInfo}>
+              <View style={styles.subscriptionHeader}>
+                <Text style={[styles.subscriptionTitle, { color: colors.text }]}>
+                  {planInfo?.name || 'Free Plan'}
+                </Text>
+                <PlanBadge plan={plan} size="small" />
+              </View>
+              <Text style={[styles.subscriptionDescription, { color: colors.textSecondary }]}>
+                {isFree 
+                  ? `${limits.maxCollaboratorsPerTrip} collaborators · ${limits.maxExpensesPerTrip} expenses per trip`
+                  : subscription?.cancelAtPeriodEnd
+                    ? `Cancels in ${daysUntilRenewal} days`
+                    : daysUntilRenewal
+                      ? `Renews in ${daysUntilRenewal} days`
+                      : 'Unlimited access to all features'}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
@@ -211,37 +294,39 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Recent Activity */}
+        {/* Recent Trips */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Trips</Text>
           <View style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.activityItem}>
-              <View style={[styles.activityDot, { backgroundColor: Colors.primary }]} />
-              <View style={styles.activityContent}>
-                <Text style={[styles.activityText, { color: colors.text }]}>
-                  Created trip "Summer in Paris"
-                </Text>
-                <Text style={[styles.activityTime, { color: colors.textMuted }]}>2 days ago</Text>
+            {trips.length === 0 ? (
+              <View style={styles.activityItem}>
+                <View style={[styles.activityDot, { backgroundColor: colors.textMuted }]} />
+                <View style={styles.activityContent}>
+                  <Text style={[styles.activityText, { color: colors.textSecondary }]}>
+                    No trips yet. Create your first trip!
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={[styles.activityDot, { backgroundColor: Colors.secondary }]} />
-              <View style={styles.activityContent}>
-                <Text style={[styles.activityText, { color: colors.text }]}>
-                  Added 3 expenses to "Tokyo Adventure"
-                </Text>
-                <Text style={[styles.activityTime, { color: colors.textMuted }]}>5 days ago</Text>
-              </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={[styles.activityDot, { backgroundColor: Colors.accent }]} />
-              <View style={styles.activityContent}>
-                <Text style={[styles.activityText, { color: colors.text }]}>
-                  Invited 2 friends to collaborate
-                </Text>
-                <Text style={[styles.activityTime, { color: colors.textMuted }]}>1 week ago</Text>
-              </View>
-            </View>
+            ) : (
+              trips.slice(0, 3).map((trip, index) => (
+                <TouchableOpacity
+                  key={trip.id}
+                  style={styles.activityItem}
+                  onPress={() => router.push(`/trips/${trip.id}`)}
+                >
+                  <View style={[styles.activityDot, { backgroundColor: Colors.primary }]} />
+                  <View style={styles.activityContent}>
+                    <Text style={[styles.activityText, { color: colors.text }]}>
+                      {trip.title}
+                    </Text>
+                    <Text style={[styles.activityTime, { color: colors.textMuted }]}>
+                      {new Date(trip.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         </View>
 
@@ -268,8 +353,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing['3xl'],
   },
   profileHeader: {
     alignItems: 'center',
@@ -308,12 +393,8 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   userName: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.heading2,
     fontWeight: FontWeights.bold,
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: FontSizes.md,
     marginBottom: Spacing.sm,
   },
   locationRow: {
@@ -322,7 +403,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   locationText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -333,29 +414,68 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     borderWidth: 1,
   },
   statIcon: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xs,
   },
   statValue: {
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
   },
   statLabel: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
+  },
+  // Subscription card
+  subscriptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.large,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
+  subscriptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: Spacing.md,
+  },
+  subscriptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionInfo: {
+    flex: 1,
+  },
+  subscriptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: 2,
+  },
+  subscriptionTitle: {
+    fontSize: FontSizes.body,
+    fontWeight: FontWeights.semibold,
+  },
+  subscriptionDescription: {
+    fontSize: FontSizes.caption,
   },
   section: {
     marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.semibold,
     marginBottom: Spacing.md,
   },
@@ -368,24 +488,24 @@ const styles = StyleSheet.create({
     width: '48%',
     alignItems: 'center',
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.large,
     borderWidth: 1,
     gap: Spacing.sm,
   },
   actionIcon: {
     width: 48,
     height: 48,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     fontWeight: FontWeights.medium,
   },
   activityCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.cardPadding,
+    borderRadius: BorderRadius.large,
     borderWidth: 1,
     gap: Spacing.md,
   },
@@ -404,11 +524,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activityText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.bodySmall,
     marginBottom: 2,
   },
   activityTime: {
-    fontSize: FontSizes.xs,
+    fontSize: FontSizes.caption,
   },
   signOutSection: {
     marginTop: Spacing.lg,
@@ -433,13 +553,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   emptyTitle: {
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
     textAlign: 'center',
   },
   emptyDescription: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.body,
     textAlign: 'center',
     lineHeight: 22,
   },

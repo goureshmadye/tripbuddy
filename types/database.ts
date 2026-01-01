@@ -10,17 +10,28 @@ export interface User {
   email: string;
   profilePhoto?: string | null;
   defaultCurrency: string;
+  homeCountry?: string | null;
+  onboardingComplete?: boolean;
+  walkthroughComplete?: boolean;
   createdAt: Date;
 }
 
 export interface Trip {
   id: string;
   title: string;
+  destination?: string | null;
+  destinationPlaceId?: string | null;
+  destinationLat?: number | null;
+  destinationLng?: number | null;
   startDate: Date;
   endDate: Date;
   creatorId: string;
+  currency?: string | null;
   transportationMode?: string | null;
   tripType?: string | null;
+  budgetRange?: string | null;
+  travelerCount?: string | null;
+  accommodationType?: string | null;
   createdAt: Date;
 }
 
@@ -31,6 +42,22 @@ export interface TripCollaborator {
   tripId: string;
   userId: string;
   role: CollaboratorRole;
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+
+export interface TripInvitation {
+  id: string;
+  tripId: string;
+  invitedEmail: string;
+  invitedUserId?: string | null; // Set when user exists in system
+  invitedBy: string; // User ID of inviter
+  role: CollaboratorRole;
+  status: InvitationStatus;
+  inviteCode: string; // Unique code for joining
+  expiresAt: Date;
+  createdAt: Date;
+  respondedAt?: Date | null;
 }
 
 // ============================================
@@ -74,7 +101,9 @@ export interface Expense {
   amount: number;
   currency: string;
   paidBy: string;
+  category?: 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ExpenseShare {
@@ -100,15 +129,57 @@ export interface TripDocument {
 // Firestore Collection Names
 // ============================================
 
+// ============================================
+// 4.4 Notifications
+// ============================================
+
+export type NotificationType = 
+  | 'collaborator_added'
+  | 'collaborator_removed'
+  | 'collaborator_role_changed'
+  | 'trip_invitation'
+  | 'invitation_accepted'
+  | 'expense_added'
+  | 'expense_updated'
+  | 'itinerary_added'
+  | 'itinerary_updated'
+  | 'trip_updated'
+  | 'system'
+  | 'reminder';
+
+export interface Notification {
+  id: string;
+  userId: string; // Recipient user ID
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  // Related entity references
+  tripId?: string | null;
+  expenseId?: string | null;
+  itineraryId?: string | null;
+  invitationId?: string | null;
+  // Actor who triggered the notification
+  actorId?: string | null;
+  actorName?: string | null;
+  // Metadata for grouping similar notifications
+  groupKey?: string | null;
+  // Timestamps
+  createdAt: Date;
+  readAt?: Date | null;
+}
+
 export const COLLECTIONS = {
   USERS: 'users',
   TRIPS: 'trips',
   TRIP_COLLABORATORS: 'tripCollaborators',
+  TRIP_INVITATIONS: 'tripInvitations',
   ITINERARY_ITEMS: 'itineraryItems',
   USER_LOCATIONS: 'userLocations',
   EXPENSES: 'expenses',
   EXPENSE_SHARES: 'expenseShares',
   DOCUMENTS: 'documents',
+  NOTIFICATIONS: 'notifications',
 } as const;
 
 // ============================================
