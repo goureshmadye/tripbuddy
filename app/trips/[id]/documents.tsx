@@ -1,12 +1,16 @@
-import { UpgradePrompt } from '@/components/subscription';
+import { DownloadButton } from '@/components/offline';
+import { ScreenContainer, useScreenPadding } from '@/components/screen-container';
+import { LimitWarning, UpgradePrompt } from '@/components/subscription';
 import { EmptyState } from '@/components/ui/empty-state';
 import { storage } from '@/config/firebase';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useOffline } from '@/hooks/use-offline';
 import { useSubscription, useTripUsage } from '@/hooks/use-subscription';
 import { useTripDocuments } from '@/hooks/use-trips';
 import { createDocument, deleteDocument } from '@/services/firestore';
+import { getCachedDocument } from '@/services/offline';
 import { DocumentType, TripDocument } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -17,35 +21,28 @@ import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-
-const { width } = Dimensions.get('window');
-const GALLERY_COLUMNS = 3;
-const GALLERY_GAP = Spacing.md;
-const GALLERY_ITEM_SIZE = (width - Spacing.lg * 2 - GALLERY_GAP * (GALLERY_COLUMNS - 1)) / GALLERY_COLUMNS;
 
 // Extended type for documents with display name
 type DocumentWithName = TripDocument & { name: string };
 
 const DOCUMENT_CONFIG: Record<DocumentType | string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
-  flight: { icon: 'airplane-outline', color: Colors.primary, label: 'Flight' },
-  hotel: { icon: 'bed-outline', color: Colors.secondary, label: 'Hotel' },
+  flight: { icon: 'airplane-outline', color: Colors.primary, label: 'Travel' },
+  hotel: { icon: 'bed-outline', color: Colors.secondary, label: 'Stays' },
   activity: { icon: 'ticket-outline', color: '#8B5CF6', label: 'Activity' },
   other: { icon: 'document-outline', color: '#64748B', label: 'Other' },
 };
@@ -55,22 +52,44 @@ const FILTER_OPTIONS: (DocumentType | 'all')[] = ['all', 'flight', 'hotel', 'act
 export default function DocumentsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user, firebaseUser } = useAuth();
+  const { firebaseUser } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { bottom } = useScreenPadding();
 
   const { documents: rawDocuments, loading, error } = useTripDocuments(id);
   const [filter, setFilter] = useState<DocumentType | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
   const [uploading, setUploading] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<DocumentWithName | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewImageError, setPreviewImageError] = useState(false);
   
   // Subscription and usage limits
   const { limits } = useSubscription();
   const { usage, documentAccess, refresh: refreshUsage } = useTripUsage(id || '');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  
+  // Offline functionality
+  const { isOnline } = useOffline();
+  const [cachedDocIds, setCachedDocIds] = useState<Set<string>>(new Set());
+  
+  // Check which documents are cached
+  useEffect(() => {
+    const checkCachedDocs = async () => {
+      const cachedIds = new Set<string>();
+      for (const doc of rawDocuments) {
+        const cached = await getCachedDocument(doc.id);
+        if (cached) {
+          cachedIds.add(doc.id);
+        }
+      }
+      setCachedDocIds(cachedIds);
+    };
+    if (rawDocuments.length > 0) {
+      checkCachedDocs();
+    }
+  }, [rawDocuments]);
 
   // Map documents to include name from fileName or default
   const documents: DocumentWithName[] = rawDocuments.map((doc) => ({
@@ -96,10 +115,6 @@ export default function DocumentsScreen() {
     return DOCUMENT_CONFIG[type || 'other'] || DOCUMENT_CONFIG.other;
   };
 
-  const getFileExtension = (name: string) => {
-    return name.split('.').pop()?.toUpperCase() || 'FILE';
-  };
-
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', { 
       month: 'short', 
@@ -116,7 +131,6 @@ export default function DocumentsScreen() {
     const response = await fetch(uri);
     const blob = await response.blob();
     
-    const fileExtension = fileName.split('.').pop() || 'file';
     const uniqueFileName = `${Date.now()}_${fileName}`;
     const storageRef = ref(storage, `trips/${id}/documents/${uniqueFileName}`);
     
@@ -132,8 +146,8 @@ export default function DocumentsScreen() {
       'Document Type',
       'What type of document is this?',
       [
-        { text: 'Flight', onPress: () => onSelect('flight') },
-        { text: 'Hotel', onPress: () => onSelect('hotel') },
+        { text: 'Travel', onPress: () => onSelect('flight') },
+        { text: 'Stays', onPress: () => onSelect('hotel') },
         { text: 'Activity', onPress: () => onSelect('activity') },
         { text: 'Other', onPress: () => onSelect('other') },
         { text: 'Cancel', style: 'cancel' },
@@ -271,6 +285,7 @@ export default function DocumentsScreen() {
   const handleViewDocument = (doc: DocumentWithName) => {
     // Open inline preview modal
     setPreviewDoc(doc);
+    setPreviewImageError(false);
   };
 
   const handleOpenExternal = async (doc: DocumentWithName) => {
@@ -386,7 +401,7 @@ export default function DocumentsScreen() {
       'Document options',
       [
         { text: 'Preview', onPress: () => handleViewDocument(doc) },
-        { text: 'Open External', onPress: () => handleOpenExternal(doc) },
+        // Removed: { text: 'Open External', onPress: () => handleOpenExternal(doc) },
         { text: 'Share', onPress: () => handleShareDocument(doc) },
         { text: 'Copy Link', onPress: () => handleCopyLink(doc) },
         { text: 'Delete', style: 'destructive', onPress: () => handleDeleteDocument(doc) },
@@ -401,13 +416,37 @@ export default function DocumentsScreen() {
     const extension = previewDoc.name.split('.').pop()?.toLowerCase() || '';
     
     if (isImageFile(previewDoc.name)) {
+      if (previewImageError) {
+        // Show fallback UI if image failed to load
+        const config = getDocConfig(previewDoc.type);
+        return (
+          <View style={styles.previewFallback}>
+            <View style={[styles.previewFallbackIcon, { backgroundColor: config.color + '15' }]}>
+              <Ionicons name={config.icon} size={64} color={config.color} />
+            </View>
+            <Text style={[styles.previewFallbackName, { color: colors.text }]}>{previewDoc.name}</Text>
+            <Text style={[styles.previewFallbackType, { color: colors.textSecondary }]}>
+              Image file could not be loaded
+            </Text>
+            {/* Removed Open in External App button */}
+          </View>
+        );
+      }
+      
       return (
         <Image
           source={{ uri: previewDoc.fileUrl }}
           style={styles.previewImage}
           resizeMode="contain"
-          onLoadStart={() => setPreviewLoading(true)}
+          onLoadStart={() => {
+            setPreviewLoading(true);
+            setPreviewImageError(false);
+          }}
           onLoadEnd={() => setPreviewLoading(false)}
+          onError={() => {
+            setPreviewLoading(false);
+            setPreviewImageError(true);
+          }}
         />
       );
     }
@@ -430,7 +469,7 @@ export default function DocumentsScreen() {
       );
     }
     
-    // For other file types, show a preview card with open option
+    // For other file types, show a preview card without open option
     const config = getDocConfig(previewDoc.type);
     return (
       <View style={styles.previewFallback}>
@@ -441,19 +480,19 @@ export default function DocumentsScreen() {
         <Text style={[styles.previewFallbackType, { color: colors.textSecondary }]}>
           {extension.toUpperCase()} File
         </Text>
-        <TouchableOpacity
-          style={[styles.previewOpenButton, { backgroundColor: Colors.primary }]}
-          onPress={() => handleOpenExternal(previewDoc)}
-        >
-          <Ionicons name="open-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.previewOpenButtonText}>Open in External App</Text>
-        </TouchableOpacity>
+        {/* Removed Open in External App button */}
       </View>
     );
   };
 
+  function getFileExtension(name: string) {
+    const parts = name.split('.');
+    if (parts.length < 2) return '';
+    return parts.pop()!.toLowerCase();
+  }
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background}>
       {/* Document Preview Modal */}
       <Modal
         visible={previewDoc !== null}
@@ -461,7 +500,7 @@ export default function DocumentsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setPreviewDoc(null)}
       >
-        <SafeAreaView style={[styles.previewContainer, { backgroundColor: colors.background }]}>
+        <ScreenContainer style={styles.previewContainer} backgroundColor={colors.background}>
           {/* Preview Header */}
           <View style={[styles.previewHeader, { borderBottomColor: colors.border }]}>
             <TouchableOpacity
@@ -481,13 +520,7 @@ export default function DocumentsScreen() {
               >
                 <Ionicons name="share-outline" size={20} color={colors.text} />
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => previewDoc && handleOpenExternal(previewDoc)}
-                style={[styles.previewHeaderButton, { backgroundColor: colors.backgroundSecondary }]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="open-outline" size={20} color={colors.text} />
-              </TouchableOpacity>
+              {/* Removed Open External button from header */}
             </View>
           </View>
           
@@ -500,7 +533,7 @@ export default function DocumentsScreen() {
             )}
             {renderPreviewContent()}
           </View>
-        </SafeAreaView>
+        </ScreenContainer>
       </Modal>
 
       {/* Upload Overlay */}
@@ -515,27 +548,11 @@ export default function DocumentsScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Documents</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => setViewMode(viewMode === 'list' ? 'gallery' : 'list')}
-            style={[styles.viewToggleButton, { backgroundColor: colors.backgroundSecondary }]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons 
-              name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} 
-              size={20} 
-              color={colors.text} 
-            />
-          </TouchableOpacity>
-        </View>
+        <View style={styles.headerPlaceholder} />
       </View>
 
       {/* Filter Tabs */}
@@ -565,17 +582,17 @@ export default function DocumentsScreen() {
                 {config && (
                   <Ionicons 
                     name={config.icon} 
-                  size={16} 
-                  color={isActive ? '#FFFFFF' : colors.textSecondary} 
-                />
-              )}
-              <Text style={[
-                styles.filterTabText,
-                { color: isActive ? '#FFFFFF' : colors.text },
-              ]}>
-                {option === 'all' ? 'All' : config?.label}
-              </Text>
-            </TouchableOpacity>
+                    size={16} 
+                    color={isActive ? '#FFFFFF' : colors.textSecondary} 
+                  />
+                )}
+                <Text style={[
+                  styles.filterTabText,
+                  { color: isActive ? '#FFFFFF' : colors.text },
+                ]}>
+                  {option === 'all' ? 'All' : config?.label}
+                </Text>
+              </TouchableOpacity>
             );
           })}
         </ScrollView>
@@ -609,7 +626,7 @@ export default function DocumentsScreen() {
             {/* Document Limit Warning */}
             {!documentAccess.allowed && (
               <LimitWarning
-                type="document"
+                type="documents"
                 current={usage?.documentCount || 0}
                 limit={limits.maxDocumentsPerTrip}
                 onUpgrade={() => setShowUpgradePrompt(true)}
@@ -632,7 +649,7 @@ export default function DocumentsScreen() {
                 <Text style={[styles.statValue, { color: colors.text }]}>
                   {documents.filter(d => d.type === 'flight').length}
                 </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Flights</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Travel</Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: colors.card }, Shadows.sm]}>
                 <View style={[styles.statIconWrapper, { backgroundColor: '#8B5CF6' + '15' }]}>
@@ -645,100 +662,78 @@ export default function DocumentsScreen() {
               </View>
             </View>
 
-            {/* Documents View - List or Gallery */}
-            {viewMode === 'list' ? (
-              <View style={styles.documentsList}>
-                {filteredDocuments.map((doc) => {
-                  const config = getDocConfig(doc.type);
-                  const extension = getFileExtension(doc.name);
-                  return (
-                    <Pressable
-                      key={doc.id}
-                      style={[styles.documentCard, { backgroundColor: colors.card }, Shadows.sm]}
-                      onPress={() => handleDocumentPress(doc)}
-                      onLongPress={() => handleDocumentLongPress(doc)}
-                      delayLongPress={400}
-                    >
-                      <View style={[styles.docIconContainer, { backgroundColor: config.color + '12' }]}>
-                        <Ionicons name={config.icon} size={26} color={config.color} />
-                        <View style={[styles.extensionBadge, { backgroundColor: config.color }]}>
-                          <Text style={styles.extensionText}>{extension}</Text>
-                        </View>
+            {/* Documents View - List only (gallery removed as unused) */}
+            <View style={styles.documentsList}>
+              {filteredDocuments.map((doc) => {
+                const config = getDocConfig(doc.type);
+                const extension = getFileExtension(doc.name);
+                return (
+                  <Pressable
+                    key={doc.id}
+                    style={[styles.documentCard, { backgroundColor: colors.card }, Shadows.sm]}
+                    onPress={() => handleDocumentPress(doc)}
+                    onLongPress={() => handleDocumentLongPress(doc)}
+                    delayLongPress={400}
+                  >
+                    <View style={[styles.docIconContainer, { backgroundColor: config.color + '12' }]}>
+                      <Ionicons name={config.icon} size={26} color={config.color} />
+                      <View style={[styles.extensionBadge, { backgroundColor: config.color }]}>
+                        <Text style={styles.extensionText}>{extension}</Text>
                       </View>
-                      <View style={styles.docContent}>
-                        <Text style={[styles.docName, { color: colors.text }]} numberOfLines={1}>
-                          {doc.name}
-                        </Text>
-                        <View style={styles.docMeta}>
-                          <View style={[styles.typeBadge, { backgroundColor: config.color + '12' }]}>
-                            <Text style={[styles.typeBadgeText, { color: config.color }]}>{config.label}</Text>
-                          </View>
-                          <View style={styles.dateSeparator} />
-                          <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-                          <Text style={[styles.docDate, { color: colors.textMuted }]}>
-                            {formatDate(doc.createdAt)}
-                          </Text>
+                    </View>
+                    <View style={styles.docContent}>
+                      <Text style={[styles.docName, { color: colors.text }]} numberOfLines={1}>
+                        {doc.name}
+                      </Text>
+                      <View style={styles.docMeta}>
+                        <View style={[styles.typeBadge, { backgroundColor: config.color + '12' }]}>
+                          <Text style={[styles.typeBadgeText, { color: config.color }]}>{config.label}</Text>
                         </View>
-                      </View>
-                      <TouchableOpacity 
-                        style={[styles.docAction, { backgroundColor: colors.backgroundSecondary }]}
-                        onPress={() => handleDocumentLongPress(doc)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : (
-              <View style={styles.galleryGrid}>
-                {filteredDocuments.map((doc) => {
-                  const config = getDocConfig(doc.type);
-                  const extension = getFileExtension(doc.name);
-                  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension.toLowerCase());
-                  return (
-                    <Pressable
-                      key={doc.id}
-                      style={[styles.galleryItem, { backgroundColor: colors.card }, Shadows.sm]}
-                      onPress={() => handleDocumentPress(doc)}
-                      onLongPress={() => handleDocumentLongPress(doc)}
-                      delayLongPress={400}
-                    >
-                      {isImage && doc.fileUrl ? (
-                        <Image
-                          source={{ uri: doc.fileUrl }}
-                          style={styles.galleryThumbnail}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={[styles.galleryIconContainer, { backgroundColor: config.color + '10' }]}>
-                          <Ionicons name={config.icon} size={36} color={config.color} />
-                        </View>
-                      )}
-                      <View style={[styles.galleryExtensionBadge, { backgroundColor: config.color }]}>
-                        <Text style={styles.galleryExtensionText}>{extension}</Text>
-                      </View>
-                      <View style={styles.galleryItemInfo}>
-                        <Text style={[styles.galleryItemName, { color: colors.text }]} numberOfLines={2}>
-                          {doc.name}
-                        </Text>
-                        <Text style={[styles.galleryItemDate, { color: colors.textMuted }]}>
+                        {cachedDocIds.has(doc.id) && (
+                          <>
+                            <View style={styles.dateSeparator} />
+                            <Ionicons name="cloud-done" size={12} color={Colors.success} />
+                            <Text style={[styles.docDate, { color: Colors.success }]}>Offline</Text>
+                          </>
+                        )}
+                        <View style={styles.dateSeparator} />
+                        <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                        <Text style={[styles.docDate, { color: colors.textMuted }]}>
                           {formatDate(doc.createdAt)}
                         </Text>
                       </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
+                    </View>
+                    {!cachedDocIds.has(doc.id) && isOnline && (
+                      <DownloadButton
+                        documentId={doc.id}
+                        tripId={id || ''}
+                        fileName={doc.name}
+                        url={doc.fileUrl}
+                        type={doc.type ?? undefined}
+                        onDownloadComplete={() => {
+                          setCachedDocIds(prev => new Set([...prev, doc.id]));
+                        }}
+                        size="sm"
+                      />
+                    )}
+                    <TouchableOpacity 
+                      style={[styles.docAction, { backgroundColor: colors.backgroundSecondary }]}
+                      onPress={() => handleDocumentLongPress(doc)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  </Pressable>
+                );
+              })}
+            </View>
           </>
         )}
       </ScrollView>
 
       {/* FAB */}
       <TouchableOpacity
-        style={[styles.fab, Shadows.lg]}
+        style={[styles.fab, Shadows.lg, { bottom: bottom + Spacing.xxl }]}
         onPress={handleUpload}
         activeOpacity={0.8}
       >
@@ -755,13 +750,14 @@ export default function DocumentsScreen() {
         limit={limits.maxDocumentsPerTrip}
         requiredPlan="pro"
       />
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: 0,
   },
   uploadOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -790,37 +786,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.md,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.full,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
+    fontSize: FontSizes.heading3,
+    fontWeight: FontWeights.semibold,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  viewToggleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerPlaceholder: {
+    width: 44,
   },
   filterTabsWrapper: {
     borderBottomWidth: 1,
-    paddingBottom: Spacing.md,
-    marginBottom: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
   filterTabs: {
     flexGrow: 0,
@@ -946,52 +933,6 @@ const styles = StyleSheet.create({
   docAction: {
     padding: Spacing.sm,
     borderRadius: BorderRadius.full,
-  },
-  galleryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: GALLERY_GAP,
-  },
-  galleryItem: {
-    width: GALLERY_ITEM_SIZE,
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-  },
-  galleryThumbnail: {
-    width: '100%',
-    height: GALLERY_ITEM_SIZE * 0.85,
-  },
-  galleryIconContainer: {
-    width: '100%',
-    height: GALLERY_ITEM_SIZE * 0.85,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  galleryExtensionBadge: {
-    position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.sm,
-  },
-  galleryExtensionText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: FontWeights.bold,
-    letterSpacing: 0.3,
-  },
-  galleryItemInfo: {
-    padding: Spacing.sm,
-    gap: 2,
-  },
-  galleryItemName: {
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.medium,
-    lineHeight: FontSizes.xs * 1.3,
-  },
-  galleryItemDate: {
-    fontSize: 10,
   },
   fab: {
     position: 'absolute',

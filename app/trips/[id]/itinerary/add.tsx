@@ -1,3 +1,5 @@
+import { ScreenHeader } from '@/components/navigation/screen-header';
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
@@ -14,7 +16,6 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -118,17 +119,13 @@ export default function AddItineraryItemScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerPlaceholder} />
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Add Activity</Text>
-          <View style={styles.headerPlaceholder} />
-        </View>
+        <ScreenHeader title="Add Activity" showBack={false} />
 
         <ScrollView
           style={styles.scrollView}
@@ -259,7 +256,7 @@ export default function AddItineraryItemScreen() {
           />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 

@@ -1,7 +1,9 @@
 import { MapViewComponent, Marker, Polyline } from '@/components/maps';
+import { ScreenContainer, useScreenPadding } from '@/components/screen-container';
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useOffline } from '@/hooks/use-offline';
 import { useTrip, useTripItinerary } from '@/hooks/use-trips';
 import { ItineraryItem } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +17,6 @@ import {
   Dimensions,
   Linking,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -72,16 +73,64 @@ export default function MapScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { topMargin } = useScreenPadding();
   const mapRef = useRef<any>(null);
 
   const { trip } = useTrip(id);
   const { items, loading, error } = useTripItinerary(id);
+  const { isOnline, downloadMapRegion, getCachedMapRegions } = useOffline();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [showRoute, setShowRoute] = useState(false);
+  const [isMapSaved, setIsMapSaved] = useState(false);
+  const [savingMap, setSavingMap] = useState(false);
+  
+  // Check if map region is already saved for this trip
+  useEffect(() => {
+    const checkSavedMaps = async () => {
+      if (id) {
+        const savedRegions = await getCachedMapRegions(id);
+        setIsMapSaved(savedRegions.length > 0);
+      }
+    };
+    checkSavedMaps();
+  }, [id, getCachedMapRegions]);
+
+  // Save map for offline use
+  const handleSaveMapForOffline = async () => {
+    if (!trip || !region) return;
+    
+    setSavingMap(true);
+    try {
+      const result = await downloadMapRegion({
+        id: `${id}_${Date.now()}`,
+        tripId: id || '',
+        name: trip.title || 'Trip Map',
+        latitude: region.latitude,
+        longitude: region.longitude,
+        latitudeDelta: region.latitudeDelta,
+        longitudeDelta: region.longitudeDelta,
+        zoomLevel: Math.round(Math.log2(360 / region.longitudeDelta)),
+        tileCount: 0,
+        sizeInMB: 0,
+      });
+      
+      if (result) {
+        setIsMapSaved(true);
+        Alert.alert('Map Saved', 'This map region is now available offline.');
+      } else {
+        Alert.alert('Error', 'Failed to save map for offline use.');
+      }
+    } catch (error) {
+      console.error('Error saving map:', error);
+      Alert.alert('Error', 'Failed to save map for offline use.');
+    } finally {
+      setSavingMap(false);
+    }
+  };
   
   // Animation values
   const bottomSheetAnim = useRef(new Animated.Value(0)).current;
@@ -95,7 +144,7 @@ export default function MapScreen() {
       tension: 50,
       friction: 8,
     }).start();
-  }, []);
+  }, [bottomSheetAnim]);
   
   // Animate selected card when item changes
   useEffect(() => {
@@ -108,20 +157,7 @@ export default function MapScreen() {
         friction: 10,
       }).start();
     }
-  }, [selectedItem?.id]);
-  
-  // Set initial region based on trip destination or default
-  const getInitialRegion = (): Region => {
-    if (trip?.destinationLat != null && trip?.destinationLng != null) {
-      return {
-        latitude: trip.destinationLat,
-        longitude: trip.destinationLng,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      };
-    }
-    return INITIAL_REGION;
-  };
+  }, [selectedCardAnim, selectedItem]);
   
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
   
@@ -271,7 +307,7 @@ export default function MapScreen() {
   // Map will always use light mode (no custom styling)
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
       {/* Map View */}
       <View style={styles.mapContainer}>
         <MapViewComponent
@@ -353,7 +389,7 @@ export default function MapScreen() {
         )}
 
         {/* Map Header Overlay */}
-        <View style={styles.mapHeader}>
+        <View style={[styles.mapHeader, { top: topMargin }]}>
           <View style={styles.headerPlaceholder} />
           
           {showSearch ? (
@@ -426,6 +462,33 @@ export default function MapScreen() {
           >
             <Ionicons name="scan-outline" size={20} color={colors.text} />
           </TouchableOpacity>
+          {/* Offline Map Save Button */}
+          {isOnline && (
+            <TouchableOpacity
+              style={[
+                styles.mapButton, 
+                { 
+                  backgroundColor: isMapSaved ? Colors.success + '15' : colors.card,
+                  borderWidth: isMapSaved ? 1 : 0,
+                  borderColor: Colors.success,
+                },
+                Shadows.md
+              ]}
+              onPress={handleSaveMapForOffline}
+              activeOpacity={0.7}
+              disabled={savingMap}
+            >
+              {savingMap ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <Ionicons 
+                  name={isMapSaved ? 'cloud-done' : 'cloud-download-outline'} 
+                  size={20} 
+                  color={isMapSaved ? Colors.success : colors.text} 
+                />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -607,7 +670,7 @@ export default function MapScreen() {
           </ScrollView>
         </View>
       </Animated.View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -643,7 +706,7 @@ const styles = StyleSheet.create({
   },
   mapHeader: {
     position: 'absolute',
-    top: Spacing.lg,
+    top: Spacing.sm,
     left: Spacing.md,
     right: Spacing.md,
     flexDirection: 'row',

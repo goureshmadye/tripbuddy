@@ -1,11 +1,25 @@
 // Gemini AI Service for Trip Planning
 import { ItineraryItem } from '@/types/database';
 import { GoogleGenAI } from '@google/genai';
+import Constants from 'expo-constants';
 
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+// Get API key from Expo constants (works in both dev and production builds)
+const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || 
+                       process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
+                       '';
 
-// Initialize the Gemini AI client
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+// Lazy initialization of Gemini client to prevent crashes
+let aiClient: GoogleGenAI | null = null;
+
+const getAIClient = (): GoogleGenAI => {
+  if (!GEMINI_API_KEY) {
+    throw new Error('Gemini API key is not configured. Please set EXPO_PUBLIC_GEMINI_API_KEY in your environment.');
+  }
+  if (!aiClient) {
+    aiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  }
+  return aiClient;
+};
 
 export interface TripPreferences {
   destination: string;
@@ -154,6 +168,9 @@ export const generateTripPlan = async (preferences: TripPreferences): Promise<Ge
   const prompt = buildPrompt(preferences);
 
   try {
+    // Get the AI client (lazy initialization)
+    const ai = getAIClient();
+    
     // Use the official Gemini SDK
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',

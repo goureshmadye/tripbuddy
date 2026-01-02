@@ -1,18 +1,18 @@
 import { TripCard } from '@/components/trips/trip-card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton, SkeletonCard } from '@/components/ui/skeleton';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTrips } from '@/hooks/use-trips';
+import { acceptInvitation, getInvitationByCode } from '@/services/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
     Alert,
     Modal,
     RefreshControl,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -20,12 +20,17 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Bottom navigation height for proper content padding
+const BOTTOM_NAV_HEIGHT = 80;
 
 export default function MyTripsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const insets = useSafeAreaInsets();
 
   const { user } = useAuth();
   const { trips, loading, error, refresh } = useTrips();
@@ -35,6 +40,9 @@ export default function MyTripsScreen() {
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [tripCode, setTripCode] = useState('');
   const [joiningTrip, setJoiningTrip] = useState(false);
+  
+  // Calculate bottom padding to avoid overlap with bottom navigation
+  const bottomPadding = Math.max(insets.bottom, Spacing.lg) + BOTTOM_NAV_HEIGHT;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -68,40 +76,104 @@ export default function MyTripsScreen() {
   };
 
   const handleJoinWithCode = async () => {
-    if (!tripCode.trim()) {
+    const code = tripCode.trim().toUpperCase();
+    
+    if (!code) {
       Alert.alert('Error', 'Please enter a trip code');
+      return;
+    }
+
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in to join a trip');
+      setJoiningTrip(false);
       return;
     }
 
     setJoiningTrip(true);
     try {
-      // TODO: Implement trip code joining via Firestore
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Look up the invitation by code
+      const invitation = await getInvitationByCode(code);
+      
+      if (!invitation) {
+        Alert.alert('Error', 'Invalid trip code. Please check and try again.');
+        return;
+      }
+
+      // Check if invitation is expired
+      if (new Date() > invitation.expiresAt) {
+        Alert.alert('Error', 'This invitation has expired. Please ask the trip owner for a new code.');
+        return;
+      }
+
+      // Check if invitation is still pending
+      if (invitation.status !== 'pending') {
+        Alert.alert('Error', 'This invitation has already been used.');
+        return;
+      }
+
+      // Accept the invitation (this adds the user as a collaborator)
+      await acceptInvitation(invitation.id, user.id);
+      
+      // Refresh the trips list
+      refresh();
       
       Alert.alert(
         'Success!',
         'You\'ve joined the trip successfully.',
-        [{ text: 'OK', onPress: () => {
+        [{ text: 'View Trip', onPress: () => {
+          setJoinModalVisible(false);
+          setTripCode('');
+          router.push(`/trips/${invitation.tripId}`);
+        }},
+        { text: 'OK', onPress: () => {
           setJoinModalVisible(false);
           setTripCode('');
         }}]
       );
-    } catch (err) {
-      Alert.alert('Error', 'Invalid trip code. Please check and try again.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to join trip. Please try again.');
     } finally {
       setJoiningTrip(false);
     }
   };
 
-  // Show loading state
+  // Show loading state with skeleton
   if (loading && trips.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading your trips...
-          </Text>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header skeleton */}
+        <View style={styles.header}>
+          <View>
+            <Skeleton width={100} height={14} style={{ marginBottom: 8 }} />
+            <Skeleton width={180} height={24} />
+          </View>
+        </View>
+
+        {/* Action buttons skeleton */}
+        <View style={styles.actionButtonsContainer}>
+          <Skeleton height={48} style={{ flex: 1, borderRadius: BorderRadius.button }} />
+          <Skeleton height={48} style={{ flex: 1, borderRadius: BorderRadius.button }} />
+        </View>
+
+        {/* Stats skeleton */}
+        <View style={styles.statsContainer}>
+          <Skeleton height={80} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+          <Skeleton height={80} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+          <Skeleton height={80} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+        </View>
+
+        {/* Filter skeleton */}
+        <View style={[styles.filterContainer, { marginBottom: Spacing.lg }]}>
+          <Skeleton width={60} height={32} style={{ borderRadius: BorderRadius.pill }} />
+          <Skeleton width={80} height={32} style={{ borderRadius: BorderRadius.pill }} />
+          <Skeleton width={50} height={32} style={{ borderRadius: BorderRadius.pill }} />
+        </View>
+
+        {/* Trip cards skeleton */}
+        <View style={{ paddingHorizontal: Spacing.screenPadding }}>
+          <SkeletonCard style={{ marginBottom: Spacing.md }} />
+          <SkeletonCard style={{ marginBottom: Spacing.md }} />
+          <SkeletonCard />
         </View>
       </SafeAreaView>
     );
@@ -110,7 +182,7 @@ export default function MyTripsScreen() {
   // Show error state
   if (error) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <EmptyState
           icon="alert-circle-outline"
           title="Something went wrong"
@@ -123,7 +195,7 @@ export default function MyTripsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -203,7 +275,7 @@ export default function MyTripsScreen() {
       {/* Trips List */}
       <ScrollView
         style={styles.tripsList}
-        contentContainerStyle={styles.tripsListContent}
+        contentContainerStyle={[styles.tripsListContent, { paddingBottom: bottomPadding }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -259,13 +331,13 @@ export default function MyTripsScreen() {
               <Ionicons name="key-outline" size={20} color={colors.textMuted} />
               <TextInput
                 style={[styles.codeInput, { color: colors.text }]}
-                placeholder="Enter trip code"
+                placeholder="e.g. TRIP-ABC123"
                 placeholderTextColor={colors.textMuted}
                 value={tripCode}
                 onChangeText={setTripCode}
                 autoCapitalize="characters"
                 autoCorrect={false}
-                maxLength={8}
+                maxLength={11}
               />
             </View>
 
@@ -369,7 +441,7 @@ const styles = StyleSheet.create({
   },
   tripsListContent: {
     paddingHorizontal: Spacing.screenPadding,
-    paddingBottom: Spacing['3xl'] + Spacing.xl,
+    // Bottom padding is applied dynamically via bottomPadding state
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -436,14 +508,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.md,
-  },
-  loadingText: {
-    fontSize: FontSizes.body,
   },
 });

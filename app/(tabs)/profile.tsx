@@ -1,5 +1,7 @@
+import { ScreenContainer, useScreenPadding } from '@/components/screen-container';
 import { PlanBadge } from '@/components/subscription';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -9,16 +11,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
+
+// Bottom navigation height for proper content padding
+const BOTTOM_NAV_HEIGHT = 80;
 
 // Currency and country mapping
 const CURRENCY_COUNTRY_MAP: Record<string, { country: string; currency: string }> = {
@@ -56,10 +59,22 @@ export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { bottom } = useScreenPadding({ hasBottomNav: true });
+
+  // Calculate bottom padding for scroll content (preserve previous min spacing behavior)
+  const bottomPadding = Math.max(bottom - BOTTOM_NAV_HEIGHT, Spacing.lg) + BOTTOM_NAV_HEIGHT;
 
   const { user, loading, signOutUser, isGuestMode, disableGuestMode } = useAuth();
   const { trips } = useTrips();
   const { plan, planInfo, limits, daysUntilRenewal, isFree, subscription } = useSubscription();
+  
+  // Track image loading errors
+  const [imageError, setImageError] = React.useState(false);
+  
+  // Reset image error when user profile photo changes
+  React.useEffect(() => {
+    setImageError(false);
+  }, [user?.profilePhoto]);
 
   // Calculate stats from real data
   const memberSince = user?.createdAt 
@@ -138,18 +153,49 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
-      </SafeAreaView>
+      <ScreenContainer>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Profile Header Skeleton */}
+          <View style={styles.profileHeader}>
+            <Skeleton width={100} height={100} style={{ borderRadius: 50, marginBottom: Spacing.md }} />
+            <Skeleton width={150} height={24} style={{ marginBottom: Spacing.sm }} />
+            <Skeleton width={100} height={14} />
+          </View>
+
+          {/* Stats Skeleton */}
+          <View style={styles.statsContainer}>
+            <Skeleton height={80} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+            <Skeleton height={80} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+            <Skeleton height={80} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+          </View>
+
+          {/* Subscription Card Skeleton */}
+          <Skeleton height={80} style={{ borderRadius: BorderRadius.large, marginBottom: Spacing.lg }} />
+
+          {/* Quick Actions Skeleton */}
+          <View style={{ marginBottom: Spacing.lg }}>
+            <Skeleton width={120} height={18} style={{ marginBottom: Spacing.md }} />
+            <View style={styles.actionsGrid}>
+              <Skeleton height={90} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+              <Skeleton height={90} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+            </View>
+            <View style={[styles.actionsGrid, { marginTop: Spacing.sm }]}>
+              <Skeleton height={90} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+              <Skeleton height={90} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+            </View>
+          </View>
+        </ScrollView>
+      </ScreenContainer>
     );
   }
 
   // Guest mode UI
   if (isGuestMode || !user) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer>
         <View style={styles.emptyContainer}>
           <View style={[styles.emptyIcon, { backgroundColor: Colors.primary + '10' }]}>
             <Ionicons name="person-outline" size={48} color={Colors.primary} />
@@ -184,27 +230,35 @@ export default function ProfileScreen() {
             />
           )}
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={[styles.avatarContainer, Shadows.md]}>
-            {user.profilePhoto ? (
-              <Image source={{ uri: user.profilePhoto }} style={styles.avatar} />
+            {user.profilePhoto && !imageError ? (
+              <Image 
+                source={{ uri: user.profilePhoto }} 
+                style={styles.avatar}
+                onError={() => setImageError(true)}
+              />
             ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: Colors.primary + '20' }]}>
-                <Text style={[styles.avatarText, { color: Colors.primary }]}>
-                  {user.name.charAt(0)}
-                </Text>
+              <View style={[styles.avatarPlaceholder, { backgroundColor: Colors.primary }]}>
+                {user.name && user.name.length > 0 ? (
+                  <Text style={[styles.avatarText, { color: '#FFFFFF' }]}>
+                    {user.name.charAt(0).toUpperCase()}
+                  </Text>
+                ) : (
+                  <Ionicons name="person" size={40} color="#FFFFFF" />
+                )}
               </View>
             )}
             <TouchableOpacity
@@ -341,7 +395,7 @@ export default function ProfileScreen() {
           />
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -354,7 +408,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Spacing.screenPadding,
-    paddingBottom: Spacing['3xl'],
+    // Bottom padding is applied dynamically via bottomPadding state
   },
   profileHeader: {
     alignItems: 'center',

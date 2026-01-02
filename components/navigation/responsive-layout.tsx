@@ -3,7 +3,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomNavigation } from './bottom-navigation';
 import { NavItem, SidebarNavigation } from './sidebar-navigation';
 
@@ -18,8 +18,6 @@ interface ResponsiveLayoutProps {
 }
 
 const SIDEBAR_COLLAPSED_WIDTH = 72;
-const BOTTOM_NAV_HEIGHT = 80; // Approximate height including safe area
-const MOBILE_TOP_MARGIN = 44; // Standard iOS status bar + some padding
 
 function ResponsiveLayoutContent({
   children,
@@ -34,10 +32,6 @@ function ResponsiveLayoutContent({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const insets = useSafeAreaInsets();
-
-  // Calculate top margin for mobile - use safe area insets or fallback
-  const mobileTopPadding = isMobile ? Math.max(insets.top, MOBILE_TOP_MARGIN) : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -53,7 +47,7 @@ function ResponsiveLayoutContent({
         />
       )}
 
-      {/* Main Content */}
+      {/* Main Content - content scrolls behind bottom nav for glassmorphism */}
       <View
         style={[
           styles.content,
@@ -61,8 +55,10 @@ function ResponsiveLayoutContent({
             marginLeft: Platform.OS === 'web' ? SIDEBAR_COLLAPSED_WIDTH : 0,
             paddingLeft: Platform.OS === 'web' ? 0 : SIDEBAR_COLLAPSED_WIDTH,
           },
-          showBottomNav && { paddingBottom: BOTTOM_NAV_HEIGHT },
-          isMobile && { paddingTop: mobileTopPadding },
+          // Note: paddingBottom is handled by individual screens, not here
+          // This allows content to scroll behind the translucent bottom nav
+          // Rely on ScreenContainer for top padding
+          isMobile && {  },
         ]}
       >
         {children}
@@ -99,5 +95,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    // Content extends behind bottom nav for glassmorphism effect
   },
 });

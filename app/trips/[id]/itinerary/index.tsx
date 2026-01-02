@@ -1,3 +1,5 @@
+import { ScreenHeader } from '@/components/navigation/screen-header';
+import { ScreenContainer } from '@/components/screen-container';
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -8,16 +10,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
-
-const { width } = Dimensions.get('window');
 
 type ViewMode = 'timeline' | 'map' | 'list';
 
@@ -86,18 +84,9 @@ export default function ItineraryScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerPlaceholder} />
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Itinerary</Text>
-        <TouchableOpacity
-          onPress={handleAddItem}
-          style={[styles.addButton, { backgroundColor: Colors.primary }]}
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="Itinerary" showBack={false} />
 
       {/* View Toggle */}
       <View style={styles.viewToggle}>
@@ -318,7 +307,7 @@ export default function ItineraryScreen() {
       >
         <Ionicons name="add" size={28} color="#FFFFFF" />
       </TouchableOpacity>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -476,7 +465,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: Spacing.xl,
+    bottom: Spacing['3xl'],
     right: Spacing.screenPadding,
     width: 56,
     height: 56,
@@ -484,6 +473,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: Spacing.xl,
   },
   loadingContainer: {
     flex: 1,

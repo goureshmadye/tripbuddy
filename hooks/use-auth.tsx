@@ -15,6 +15,9 @@ import {
     updateUserDocument,
     uploadProfilePhoto as uploadProfilePhotoService
 } from "@/services/auth";
+import { getTrip, getUserPendingInvitations, updateInvitationUserId } from "@/services/firestore";
+import { notifyTripInvitation } from "@/services/notifications";
+import { cacheUserSession, getCachedUser } from "@/services/offline";
 import { User } from "@/types/database";
 import {
     AuthError,
@@ -60,6 +63,37 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper function to check for pending invitations when a new user signs up
+const checkPendingInvitationsForNewUser = async (userId: string, email: string) => {
+  try {
+    const pendingInvitations = await getUserPendingInvitations(email);
+    
+    for (const invitation of pendingInvitations) {
+      // Update the invitation with the new user's ID
+      await updateInvitationUserId(invitation.id, userId);
+      
+      // Get trip details for the notification
+      const trip = await getTrip(invitation.tripId);
+      
+      // Send notification to the new user about their pending invitation
+      await notifyTripInvitation(
+        userId,
+        invitation.tripId,
+        trip?.title || 'Trip',
+        'Someone', // We don't have inviter name readily available
+        invitation.invitedBy,
+        invitation.id
+      );
+    }
+    
+    if (pendingInvitations.length > 0) {
+      console.log(`Sent ${pendingInvitations.length} pending invitation notifications to new user ${userId}`);
+    }
+  } catch (error) {
+    console.error('Error checking pending invitations for new user:', error);
+  }
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -75,6 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     checkWalkthroughComplete().then(setIsWalkthroughComplete);
     checkGuestMode().then(setIsGuestMode);
+    
+    // Load cached user for offline access
+    getCachedUser().then((cachedUser) => {
+      if (cachedUser && !user) {
+        setUser(cachedUser);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -93,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           async (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              setUser({
+              const userData: User = {
                 id: docSnap.id,
                 name: data.name || fbUser.displayName || "User",
                 email: data.email || fbUser.email || "",
@@ -103,8 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 onboardingComplete: data.onboardingComplete || false,
                 walkthroughComplete: data.walkthroughComplete || false,
                 createdAt: data.createdAt?.toDate() || new Date(),
-              });
+              };
+              setUser(userData);
               setIsOnboardingComplete(data.onboardingComplete || false);
+              
+              // Cache user session for offline access
+              cacheUserSession(userData).catch(console.error);
             } else {
               // Create user document if it doesn't exist
               const newUser: Omit<User, "id"> = {
@@ -125,6 +170,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
               setUser({ id: fbUser.uid, ...newUser });
               setIsOnboardingComplete(false);
+              
+              // Check for pending invitations for this email and send notifications
+              if (newUser.email) {
+                checkPendingInvitationsForNewUser(fbUser.uid, newUser.email).catch(console.error);
+              }
             }
             setLoading(false);
           },

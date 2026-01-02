@@ -1,3 +1,4 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -5,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-    SafeAreaView,
     StyleSheet,
     Text,
     View,
@@ -26,7 +26,7 @@ export default function NotFoundScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       <View style={styles.content}>
         {/* Illustration */}
         <View style={[styles.iconContainer, { backgroundColor: Colors.accent + '15' }]}>
@@ -41,7 +41,7 @@ export default function NotFoundScreen() {
 
         {/* Description */}
         <Text style={[styles.description, { color: colors.textSecondary }]}>
-          Oops! Looks like you've wandered off the beaten path. The page you're looking for doesn't exist or has been moved.
+          Oops! It looks like you have wandered off the beaten path. The page you are looking for does not exist or has been moved.
         </Text>
 
         {/* Error Code */}
@@ -68,7 +68,7 @@ export default function NotFoundScreen() {
           />
         </View>
       </View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 

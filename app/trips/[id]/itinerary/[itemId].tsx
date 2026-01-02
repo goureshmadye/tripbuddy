@@ -1,3 +1,5 @@
+import { ScreenHeader } from '@/components/navigation/screen-header';
+import { ScreenContainer } from '@/components/screen-container';
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -15,7 +17,6 @@ import {
     KeyboardAvoidingView,
     Modal,
     Platform,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -52,7 +53,7 @@ const CATEGORY_CONFIG: Record<string, { icon: keyof typeof Ionicons.glyphMap; co
 
 export default function ItineraryItemDetailScreen() {
   const router = useRouter();
-  const { id, itemId } = useLocalSearchParams<{ id: string; itemId: string }>();
+  const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
@@ -221,7 +222,7 @@ export default function ItineraryItemDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -229,13 +230,13 @@ export default function ItineraryItemDetailScreen() {
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading activity...</Text>
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -246,13 +247,13 @@ export default function ItineraryItemDetailScreen() {
             description={error.message || "Something went wrong. Please try again."}
           />
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   if (!item) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -263,30 +264,33 @@ export default function ItineraryItemDetailScreen() {
             description="This activity may have been deleted or doesn't exist."
           />
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerPlaceholder} />
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={handleEdit}
-            style={[styles.headerButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="pencil-outline" size={20} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleDelete}
-            style={[styles.headerButton, { backgroundColor: Colors.error + '15' }]}
-          >
-            <Ionicons name="trash-outline" size={20} color={Colors.error} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ScreenHeader
+        title={item.title}
+        left={null}
+        right={(
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={handleEdit}
+              style={[styles.headerButton, { backgroundColor: colors.backgroundSecondary }]}
+            >
+              <Ionicons name="pencil-outline" size={20} color={colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDelete}
+              style={[styles.headerButton, { backgroundColor: Colors.error + '15' }]}
+            >
+              <Ionicons name="trash-outline" size={20} color={Colors.error} />
+            </TouchableOpacity>
+          </View>
+        )}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -457,7 +461,7 @@ export default function ItineraryItemDetailScreen() {
         onRequestClose={() => setIsEditModalVisible(false)}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <ScreenContainer style={styles.modalContainer} backgroundColor={colors.background}>
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
                 <Text style={[styles.modalCancel, { color: Colors.primary }]}>Cancel</Text>
@@ -511,10 +515,10 @@ export default function ItineraryItemDetailScreen() {
                 />
               </View>
             </ScrollView>
-          </SafeAreaView>
+          </ScreenContainer>
         </TouchableWithoutFeedback>
       </Modal>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 

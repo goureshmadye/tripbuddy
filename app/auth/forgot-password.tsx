@@ -1,3 +1,4 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
@@ -8,14 +9,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 export default function ForgotPasswordScreen() {
@@ -57,14 +57,14 @@ export default function ForgotPasswordScreen() {
 
   if (sent) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
         <View style={styles.successContent}>
           <View style={[styles.successIcon, { backgroundColor: Colors.success + '15' }]}>
             <Ionicons name="mail-open-outline" size={48} color={Colors.success} />
           </View>
           <Text style={[styles.successTitle, { color: colors.text }]}>Check your email</Text>
           <Text style={[styles.successText, { color: colors.textSecondary }]}>
-            We've sent password reset instructions to{'\n'}
+            We have sent password reset instructions to{'\n'}
             <Text style={{ fontWeight: FontWeights.semibold }}>{email}</Text>
           </Text>
           <Button
@@ -79,16 +79,16 @@ export default function ForgotPasswordScreen() {
             style={styles.resendButton}
           >
             <Text style={[styles.resendText, { color: Colors.primary }]}>
-              Didn't receive email? Try again
+                Did not receive email? Try again
             </Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -114,7 +114,7 @@ export default function ForgotPasswordScreen() {
           <View style={styles.titleContainer}>
             <Text style={[styles.title, { color: colors.text }]}>Forgot Password?</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              No worries! Enter your email and we'll send you reset instructions.
+              No worries! Enter your email and we will send you reset instructions.
             </Text>
           </View>
 
@@ -156,7 +156,7 @@ export default function ForgotPasswordScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
   },
   header: {
-    paddingTop: Spacing.md,
+    paddingTop: 0,
     marginBottom: Spacing.lg,
   },
   headerPlaceholder: {

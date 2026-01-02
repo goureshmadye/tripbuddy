@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Alert,
+    SafeAreaView,
     ScrollView,
     StyleSheet,
     Switch,
@@ -15,7 +16,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SubscriptionScreen() {
   const router = useRouter();

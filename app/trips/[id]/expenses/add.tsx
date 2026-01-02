@@ -1,3 +1,4 @@
+import { useScreenPadding } from '@/components/screen-container';
 import { LimitWarning, UpgradePrompt } from '@/components/subscription';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
@@ -11,19 +12,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// safe area handled via useScreenPadding
 
 type ExpenseCategory = 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
 type ExpenseSplitType = 'equal' | 'percentage' | 'custom';
@@ -55,7 +56,7 @@ export default function AddExpenseScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const insets = useSafeAreaInsets();
+  const { topMargin, bottom } = useScreenPadding();
 
   // Auth and collaborators
   const { user } = useAuth();
@@ -205,8 +206,8 @@ export default function AddExpenseScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* Header with proper safe area padding */}
-        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+        {/* Header with centralized top padding */}
+        <View style={[styles.header, { paddingTop: topMargin }]}>
           <TouchableOpacity 
             onPress={() => router.back()}
             style={styles.backButton}
@@ -443,7 +444,7 @@ export default function AddExpenseScreen() {
         </ScrollView>
 
         {/* Bottom Button */}
-        <View style={[styles.bottomContainer, { backgroundColor: colors.background, paddingBottom: insets.bottom + Spacing.md }]}>
+        <View style={[styles.bottomContainer, { backgroundColor: colors.background, paddingBottom: bottom + Spacing.md }]}>
           <Button
             title="Save Expense"
             onPress={handleSave}

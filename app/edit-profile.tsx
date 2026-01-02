@@ -1,4 +1,5 @@
 import LoadingScreen from '@/components/loading-screen';
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
@@ -6,18 +7,20 @@ import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { updateUser } from '@/services/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Redirect, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Currency and country mapping
 const CURRENCY_COUNTRY_MAP: Record<string, { country: string; currency: string }> = {
@@ -62,9 +65,30 @@ export default function EditProfileScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const { user, refreshUser, firebaseUser, loading, isGuestMode, isWalkthroughComplete } = useAuth();
+  const { user, refreshUser, firebaseUser, loading, isGuestMode, isWalkthroughComplete, uploadProfilePhoto } = useAuth();
   
-  // Auth guard
+  // ALL HOOKS MUST BE DECLARED BEFORE ANY CONDITIONAL RETURNS
+  // Profile state
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  
+  // Password modal state
+  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Currency modal state
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  
+  // Subscription state
+  const [currentPlan, setCurrentPlan] = useState<'free' | 'pro' | 'premium'>('free');
+  const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
+
+  // Auth guard - AFTER all hooks
   if (loading) {
     return <LoadingScreen message="Loading..." />;
   }
@@ -76,23 +100,90 @@ export default function EditProfileScreen() {
     return <Redirect href="/auth" />;
   }
 
-  // Profile state
-  const [name, setName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Password modal state
-  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  // Handle photo selection and upload
+  const handleChangePhoto = async () => {
+    Alert.alert(
+      'Change Profile Photo',
+      'Choose an option',
+      [
+        {
+          text: 'Take Photo',
+          onPress: handleTakePhoto,
+        },
+        {
+          text: 'Choose from Library',
+          onPress: handlePickFromLibrary,
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
 
-  // Currency modal state
-  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const handleTakePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Denied', 'Camera access is required to take photos.');
+        return;
+      }
 
-  // Subscription state
-  const [currentPlan, setCurrentPlan] = useState<'free' | 'pro' | 'premium'>('free');
-  const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadPhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  };
+
+  const handlePickFromLibrary = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Denied', 'Photo library access is required.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadPhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
+
+  const uploadPhoto = async (uri: string) => {
+    setIsUploadingPhoto(true);
+    try {
+      await uploadProfilePhoto(uri);
+      await refreshUser();
+      setImageError(false);
+      Alert.alert('Success', 'Profile photo updated successfully!');
+    } catch {
+      console.error('Upload error');
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const getPlanLabel = () => {
     const plan = SUBSCRIPTION_PLANS.find(p => p.id === currentPlan);
@@ -121,7 +212,7 @@ export default function EditProfileScreen() {
       await updateUser(user.id, { name: name.trim() });
       await refreshUser();
       Alert.alert('Success', 'Profile updated successfully');
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     } finally {
       setIsSaving(false);
@@ -144,12 +235,16 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // TODO: Implement actual password change with Firebase
-    Alert.alert('Success', 'Password changed successfully');
-    setChangePasswordModalVisible(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    try {
+      // TODO: Implement actual password change with Firebase
+      Alert.alert('Success', 'Password changed successfully');
+      setChangePasswordModalVisible(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch {
+      Alert.alert('Error', 'Failed to change password');
+    }
   };
 
   const handleCurrencyChange = async (currency: string) => {
@@ -158,13 +253,13 @@ export default function EditProfileScreen() {
       await updateUser(user.id, { defaultCurrency: currency });
       await refreshUser();
       setCurrencyModalVisible(false);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to update currency');
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}> 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -181,14 +276,38 @@ export default function EditProfileScreen() {
       >
         {/* Profile Avatar */}
         <View style={styles.profileAvatarSection}>
-          <View style={[styles.avatar, { backgroundColor: Colors.primary + '20' }]}>
-            <Text style={[styles.avatarText, { color: Colors.primary }]}>
-              {user?.name?.charAt(0) || '?'}
-            </Text>
+          <View style={[styles.avatarContainer]}>
+            {isUploadingPhoto ? (
+              <View style={[styles.avatar, { backgroundColor: Colors.primary + '20' }]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+              </View>
+            ) : user?.profilePhoto && !imageError ? (
+              <Image 
+                source={{ uri: user.profilePhoto }} 
+                style={styles.avatarImage}
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: Colors.primary }]}>
+                {user?.name && user.name.length > 0 ? (
+                  <Text style={[styles.avatarText, { color: '#FFFFFF' }]}>
+                    {user.name.charAt(0).toUpperCase()}
+                  </Text>
+                ) : (
+                  <Ionicons name="person" size={40} color="#FFFFFF" />
+                )}
+              </View>
+            )}
           </View>
-          <TouchableOpacity style={styles.changePhotoButton}>
+          <TouchableOpacity 
+            style={styles.changePhotoButton} 
+            onPress={handleChangePhoto}
+            disabled={isUploadingPhoto}
+          >
             <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-            <Text style={[styles.changePhotoText, { color: Colors.primary }]}>Change Photo</Text>
+            <Text style={[styles.changePhotoText, { color: Colors.primary }]}>
+              {isUploadingPhoto ? 'Uploading...' : 'Change Photo'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -292,7 +411,7 @@ export default function EditProfileScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setChangePasswordModalVisible(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        <ScreenContainer style={{ ...styles.modalContainer, backgroundColor: colors.background }}> 
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Change Password</Text>
             <TouchableOpacity onPress={() => setChangePasswordModalVisible(false)}>
@@ -337,7 +456,7 @@ export default function EditProfileScreen() {
               style={{ marginTop: Spacing.lg }}
             />
           </ScrollView>
-        </SafeAreaView>
+        </ScreenContainer>
       </Modal>
 
       {/* Currency Modal */}
@@ -347,7 +466,7 @@ export default function EditProfileScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setCurrencyModalVisible(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        <ScreenContainer style={{ ...styles.modalContainer, backgroundColor: colors.background }}> 
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Select Location & Currency</Text>
             <TouchableOpacity onPress={() => setCurrencyModalVisible(false)}>
@@ -375,7 +494,7 @@ export default function EditProfileScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </SafeAreaView>
+        </ScreenContainer>
       </Modal>
 
       {/* Subscription Modal */}
@@ -385,7 +504,7 @@ export default function EditProfileScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setSubscriptionModalVisible(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        <ScreenContainer style={{ ...styles.modalContainer, backgroundColor: colors.background }}> 
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Subscription Plans</Text>
             <TouchableOpacity onPress={() => setSubscriptionModalVisible(false)}>
@@ -438,9 +557,9 @@ export default function EditProfileScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </SafeAreaView>
+        </ScreenContainer>
       </Modal>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -453,7 +572,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.screenPadding,
-    paddingVertical: Spacing.md,
+    paddingTop: 0,
+    paddingBottom: Spacing.md,
   },
   backButton: {
     width: 44,
@@ -480,16 +600,23 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
     marginTop: Spacing.md,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  avatarContainer: {
     marginBottom: Spacing.sm,
   },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
   avatarText: {
-    fontSize: 32,
+    fontSize: 40,
     fontWeight: FontWeights.bold,
   },
   changePhotoButton: {

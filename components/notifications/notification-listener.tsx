@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { subscribeToNotifications } from '@/services/notifications';
 import { Notification } from '@/types/database';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 /**
  * Component that listens for new notifications and shows toast popups.
@@ -17,6 +17,50 @@ export function NotificationListener() {
   // Track previously seen notification IDs to detect new ones
   const seenNotificationIds = useRef<Set<string>>(new Set());
   const isInitialLoad = useRef(true);
+
+  const handleNotificationNavigation = useCallback((notification: Notification) => {
+    switch (notification.type) {
+      case 'collaborator_added':
+      case 'trip_updated':
+        if (notification.tripId) {
+          router.push(`/trips/${notification.tripId}`);
+        }
+        break;
+      
+      case 'expense_added':
+      case 'expense_updated':
+        if (notification.tripId) {
+          router.push(`/trips/${notification.tripId}/expenses`);
+        }
+        break;
+      
+      case 'itinerary_added':
+      case 'itinerary_updated':
+        if (notification.tripId && notification.itineraryId) {
+          router.push(`/trips/${notification.tripId}/itinerary/${notification.itineraryId}`);
+        } else if (notification.tripId) {
+          router.push(`/trips/${notification.tripId}/itinerary`);
+        }
+        break;
+      
+      case 'trip_invitation':
+        // Navigate to notifications screen to handle invitation
+        router.push('/(tabs)/notifications');
+        break;
+      
+      case 'invitation_accepted':
+      case 'collaborator_role_changed':
+        if (notification.tripId) {
+          router.push(`/trips/${notification.tripId}/collaborators`);
+        }
+        break;
+      
+      default:
+        // Default to notifications screen
+        router.push('/(tabs)/notifications');
+        break;
+    }
+  }, [router]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -68,51 +112,7 @@ export function NotificationListener() {
     return () => {
       unsubscribe();
     };
-  }, [user?.id, showToast, router]);
-
-  const handleNotificationNavigation = (notification: Notification) => {
-    switch (notification.type) {
-      case 'collaborator_added':
-      case 'trip_updated':
-        if (notification.tripId) {
-          router.push(`/trips/${notification.tripId}`);
-        }
-        break;
-      
-      case 'expense_added':
-      case 'expense_updated':
-        if (notification.tripId) {
-          router.push(`/trips/${notification.tripId}/expenses`);
-        }
-        break;
-      
-      case 'itinerary_added':
-      case 'itinerary_updated':
-        if (notification.tripId && notification.itineraryId) {
-          router.push(`/trips/${notification.tripId}/itinerary/${notification.itineraryId}`);
-        } else if (notification.tripId) {
-          router.push(`/trips/${notification.tripId}/itinerary`);
-        }
-        break;
-      
-      case 'trip_invitation':
-        // Navigate to notifications screen to handle invitation
-        router.push('/(tabs)/notifications');
-        break;
-      
-      case 'invitation_accepted':
-      case 'collaborator_role_changed':
-        if (notification.tripId) {
-          router.push(`/trips/${notification.tripId}/collaborators`);
-        }
-        break;
-      
-      default:
-        // Default to notifications screen
-        router.push('/(tabs)/notifications');
-        break;
-    }
-  };
+  }, [user?.id, showToast, handleNotificationNavigation]);
 
   // This component doesn't render anything
   return null;

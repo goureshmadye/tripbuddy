@@ -1,3 +1,5 @@
+import { ScreenHeader } from '@/components/navigation/screen-header';
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from "@/components/ui/button";
 import { Divider } from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
@@ -25,7 +27,6 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -55,7 +56,6 @@ export default function LoginScreen() {
   // Rate limiting state
   const [isLocked, setIsLocked] = useState(false);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
-  const [remainingAttempts, setRemainingAttempts] = useState(5);
 
   // Is form valid
   const isFormValid =
@@ -93,7 +93,6 @@ export default function LoginScreen() {
       setLockoutSeconds(result.lockoutSeconds);
     } else {
       setIsLocked(false);
-      setRemainingAttempts(result.remainingAttempts);
     }
   };
 
@@ -182,7 +181,6 @@ export default function LoginScreen() {
     } catch (error) {
       // Record failed attempt
       const result = await recordFailedAttempt();
-      setRemainingAttempts(result.remainingAttempts);
 
       if (!result.allowed) {
         setIsLocked(true);
@@ -254,9 +252,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
@@ -267,9 +263,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerPlaceholder} />
-          </View>
+          <ScreenHeader showBack={false} />
 
           {/* Title */}
           <View style={styles.titleContainer}>
@@ -366,7 +360,7 @@ export default function LoginScreen() {
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
             <Text style={[styles.signupText, { color: colors.textSecondary }]}>
-              Don't have an account?{" "}
+              Do not have an account?{" "}
             </Text>
             <TouchableOpacity onPress={() => router.push("/auth/signup")}>
               <Text style={[styles.signupLink, { color: Colors.primary }]}>
@@ -388,7 +382,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 

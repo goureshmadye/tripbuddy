@@ -1,4 +1,6 @@
+import { ScreenContainer, useScreenPadding } from '@/components/screen-container';
 import { EmptyState } from '@/components/ui/empty-state';
+import { SkeletonListItem } from '@/components/ui/skeleton';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotifications } from '@/hooks/use-notifications';
@@ -7,9 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +17,9 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
+
+// Bottom navigation height for proper content padding
+const BOTTOM_NAV_HEIGHT = 80;
 
 const getNotificationIcon = (type: NotificationType): keyof typeof Ionicons.glyphMap => {
   switch (type) {
@@ -176,6 +179,10 @@ export default function NotificationsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { bottom } = useScreenPadding({ hasBottomNav: true });
+
+  // Calculate bottom padding for scroll content
+  const bottomPadding = Math.max(bottom, Spacing.lg) + BOTTOM_NAV_HEIGHT;
 
   const {
     notifications,
@@ -247,23 +254,24 @@ export default function NotificationsScreen() {
 
   if (loading && notifications.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer>
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading notifications...
-          </Text>
+        <View style={{ paddingHorizontal: Spacing.screenPadding, gap: Spacing.sm }}>
+          <SkeletonListItem />
+          <SkeletonListItem />
+          <SkeletonListItem />
+          <SkeletonListItem />
+          <SkeletonListItem />
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   if (error && notifications.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer>
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
         </View>
@@ -274,12 +282,12 @@ export default function NotificationsScreen() {
           actionLabel="Retry"
           onAction={refresh}
         />
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer>
       <View style={styles.header}>
         <View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
@@ -307,7 +315,7 @@ export default function NotificationsScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -337,7 +345,7 @@ export default function NotificationsScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -350,7 +358,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: Spacing.screenPadding,
-    paddingVertical: Spacing.md,
+    paddingTop: 0,
+    paddingBottom: Spacing.md,
   },
   headerTitle: {
     fontSize: FontSizes.heading2,
@@ -377,16 +386,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Spacing.screenPadding,
-    paddingBottom: Spacing['2xl'],
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.md,
-  },
-  loadingText: {
-    fontSize: FontSizes.body,
+    // Bottom padding is applied dynamically via bottomPadding
   },
   notificationsList: {
     gap: Spacing.sm,

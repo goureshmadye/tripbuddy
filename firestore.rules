@@ -2,10 +2,13 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection - users can read/write their own documents
+    // Users collection - users can read any user document (for email lookups)
+    // but can only write to their own document
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // Allow any authenticated user to read user documents (needed for email lookups and collaborator info)
+      allow read: if request.auth != null;
+      // Only allow users to create/update/delete their own document
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
     
     // Trips collection
@@ -58,14 +61,8 @@ service cloud.firestore {
     
     // Notifications collection - users can only access their own notifications
     match /notifications/{notificationId} {
-      // Users can read their own notifications (single doc or list query)
-      // For list queries, the query must constrain userId to the authenticated user
-      allow read: if request.auth != null && (
-        resource == null || resource.data.userId == request.auth.uid
-      );
-      
-      // Also allow list queries that filter by userId matching the authenticated user
-      allow list: if request.auth != null;
+      // Users can read their own notifications
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       
       // Allow create for any authenticated user (to send notifications to others)
       allow create: if request.auth != null;

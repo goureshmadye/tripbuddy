@@ -1,6 +1,5 @@
 import LoadingScreen from '@/components/loading-screen';
 import { NavItem, ResponsiveLayout } from '@/components/navigation';
-import { Colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useUnreadNotificationCount } from '@/hooks/use-notifications';
@@ -51,12 +50,25 @@ export default function TabLayout() {
   const segments = useSegments();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
   const { showSidebar } = useResponsive();
   const unreadCount = useUnreadNotificationCount();
   
   // Auth guard - redirect unauthenticated users to auth
   const { firebaseUser, loading, isGuestMode, isWalkthroughComplete } = useAuth();
+
+  // Build nav items with dynamic badge count - MUST be before any conditional returns
+  const navItems: NavItem[] = useMemo(() => {
+    return BASE_NAV_ITEMS.map((item) => ({
+      ...item,
+      badge: item.key === 'notifications' && unreadCount > 0 ? unreadCount : undefined,
+    }));
+  }, [unreadCount]);
+
+  // Determine active tab from segments - MUST be before any conditional returns
+  const activeItem = useMemo(() => {
+    const tabSegment = segments[1]; // e.g., ['(tabs)', 'index']
+    return tabSegment || 'index';
+  }, [segments]);
 
   // Show loading while checking auth state
   if (loading) {
@@ -72,21 +84,6 @@ export default function TabLayout() {
     // Otherwise go to auth landing page
     return <Redirect href="/auth" />;
   }
-
-  // Build nav items with dynamic badge count
-  // Only show badge when unreadCount > 0, otherwise hide it completely
-  const navItems: NavItem[] = useMemo(() => {
-    return BASE_NAV_ITEMS.map((item) => ({
-      ...item,
-      badge: item.key === 'notifications' && unreadCount > 0 ? unreadCount : undefined,
-    }));
-  }, [unreadCount]);
-
-  // Determine active tab from segments
-  const activeItem = useMemo(() => {
-    const tabSegment = segments[1]; // e.g., ['(tabs)', 'index']
-    return tabSegment || 'index';
-  }, [segments]);
 
   const handleItemPress = (key: string) => {
     // Handle navigation based on key
@@ -112,7 +109,7 @@ export default function TabLayout() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ResponsiveLayout
         navItems={navItems}

@@ -1,4 +1,6 @@
+import { ScreenContainer, useScreenPadding } from '@/components/screen-container';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -7,14 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -41,6 +41,10 @@ export default function TripOverviewScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { bottom } = useScreenPadding();
+
+  // Calculate bottom padding for scroll content
+  const bottomPadding = Math.max(bottom, Spacing.lg);
 
   // Auth and user data
   const { user } = useAuth();
@@ -81,24 +85,52 @@ export default function TripOverviewScreen() {
     return `${currency} ${formattedAmount}`;
   };
 
-  // Loading state
+  // Loading state with skeleton
   if (tripLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading trip...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header skeleton */}
+          <View style={styles.header}>
+            <View style={styles.headerPlaceholder} />
+          </View>
+
+          {/* Hero skeleton */}
+          <View style={styles.heroSection}>
+            <Skeleton width={80} height={80} style={{ borderRadius: BorderRadius.large, marginBottom: Spacing.md }} />
+            <Skeleton width={200} height={28} style={{ marginBottom: Spacing.sm }} />
+            <Skeleton width={250} height={16} />
+          </View>
+
+          {/* Quick actions skeleton */}
+          <View style={styles.quickActionsSection}>
+            <Skeleton width={120} height={20} style={{ marginBottom: Spacing.md }} />
+            <View style={styles.quickActionsGrid}>
+              <Skeleton height={90} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+              <Skeleton height={90} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+              <Skeleton height={90} style={{ flex: 1, borderRadius: BorderRadius.large }} />
+            </View>
+          </View>
+
+          {/* Stats skeleton */}
+          <View style={styles.statsSection}>
+            <View style={styles.statsGrid}>
+              <Skeleton height={80} style={{ width: (width - Spacing.screenPadding * 2 - Spacing.sm) / 2, borderRadius: BorderRadius.large }} />
+              <Skeleton height={80} style={{ width: (width - Spacing.screenPadding * 2 - Spacing.sm) / 2, borderRadius: BorderRadius.large }} />
+            </View>
+          </View>
+        </ScrollView>
+        </ScreenContainer>
     );
   }
 
   // Error state
   if (tripError || !trip) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer style={{...styles.container, backgroundColor: colors.background}}> 
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -107,7 +139,7 @@ export default function TripOverviewScreen() {
           title="Trip not found"
           description={tripError?.message || "We couldn't find this trip. It may have been deleted."}
         />
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
@@ -122,21 +154,17 @@ export default function TripOverviewScreen() {
     return itemDate >= todayStart && itemDate < todayEnd;
   });
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    return (
+      <ScreenContainer style={{...styles.container, backgroundColor: colors.background}}> 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
-          <TouchableOpacity
-            style={[styles.menuButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
-          </TouchableOpacity>
+          {/* Removed three-dot menu as requested */}
         </View>
 
         {/* Trip Hero */}
@@ -187,13 +215,13 @@ export default function TripOverviewScreen() {
         {/* Today's Schedule */}
         <View style={styles.scheduleSection}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Schedule</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Schedule for Today</Text>
             <TouchableOpacity onPress={() => router.push(`/trips/${id}/itinerary`)}>
               <Text style={[styles.seeAllText, { color: Colors.primary }]}>See All</Text>
             </TouchableOpacity>
           </View>
           {itineraryLoading ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <Skeleton height={80} style={{ borderRadius: BorderRadius.large }} />
           ) : todaysItems.length === 0 ? (
             <View style={[styles.emptySchedule, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Ionicons name="calendar-outline" size={32} color={colors.textMuted} />
@@ -317,7 +345,7 @@ export default function TripOverviewScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -329,18 +357,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Spacing['2xl'],
+    // Bottom padding is applied dynamically via bottomPadding
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.screenPadding,
-    paddingTop: Spacing.md,
+    paddingTop: 0,
   },
   headerPlaceholder: {
-    width: 44,
     height: 44,
+    width: 44,
   },
   menuButton: {
     width: 44,
@@ -493,15 +521,6 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: FontSizes.caption,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.md,
-  },
-  loadingText: {
-    fontSize: FontSizes.body,
   },
   emptySchedule: {
     alignItems: 'center',

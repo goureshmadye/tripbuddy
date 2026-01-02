@@ -1,39 +1,38 @@
+import { ScreenContainer } from '@/components/screen-container';
+import { LimitWarning, UpgradePrompt } from '@/components/subscription';
 import { Button } from '@/components/ui/button';
-import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSubscription, useTripUsage } from '@/hooks/use-subscription';
 import { useTrip, useTripCollaborators, useTripInvitations } from '@/hooks/use-trips';
 import {
-    cancelInvitation,
-    createInvitation,
-    getUserByEmail,
-    removeCollaborator,
-    resendInvitation,
-    updateCollaboratorRole,
+  cancelInvitation,
+  createInvitation,
+  removeCollaborator,
+  resendInvitation,
+  updateCollaboratorRole
 } from '@/services/firestore';
 import {
-    notifyCollaboratorRemoved,
-    notifyTripInvitation
+  notifyCollaboratorRemoved,
+  notifyTripInvitation
 } from '@/services/notifications';
 import { CollaboratorRole, TripCollaborator, TripInvitation } from '@/types/database';
 import { validateEmail } from '@/utils/validation';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 type CollaboratorWithProfile = TripCollaborator & { name: string; email: string };
@@ -45,7 +44,6 @@ const ROLE_CONFIG: Record<CollaboratorRole, { label: string; color: string; icon
 };
 
 export default function CollaboratorsScreen() {
-  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -53,7 +51,7 @@ export default function CollaboratorsScreen() {
 
   const { user: currentUser } = useAuth();
   const { trip, loading: tripLoading } = useTrip(id);
-  const { collaborators: rawCollaborators, loading: collabLoading, error } = useTripCollaborators(id);
+  const { collaborators: rawCollaborators, loading: collabLoading } = useTripCollaborators(id);
   const { pendingInvitations, loading: invitationsLoading } = useTripInvitations(id);
   
   // Subscription and usage limits
@@ -144,8 +142,9 @@ export default function CollaboratorsScreen() {
       return;
     }
     
-    if (!validateEmail(email)) {
-      setInviteError('Please enter a valid email address');
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+      setInviteError(emailValidation.error || 'Please enter a valid email address');
       return;
     }
 
@@ -173,24 +172,33 @@ export default function CollaboratorsScreen() {
     setInviteError(null);
 
     try {
-      const { id: invitationId, inviteCode } = await createInvitation({
+      const { id: invitationId, inviteCode, existingUserId } = await createInvitation({
         tripId: id,
         invitedEmail: email,
         invitedBy: currentUser.id,
+        inviterName: currentUser.name,
+        tripTitle: trip?.title || 'Trip',
         role: selectedRole,
       });
 
       // If the invited user exists, send them a notification
-      const invitedUser = await getUserByEmail(email);
-      if (invitedUser) {
-        notifyTripInvitation(
-          invitedUser.id,
-          id,
-          trip?.title || 'Trip',
-          currentUser.name,
-          currentUser.id,
-          invitationId
-        ).catch(console.error);
+      if (existingUserId) {
+        try {
+          await notifyTripInvitation(
+            existingUserId,
+            id,
+            trip?.title || 'Trip',
+            currentUser.name,
+            currentUser.id,
+            invitationId
+          );
+          console.log('Notification sent to existing user:', existingUserId);
+        } catch (notifyError) {
+          console.error('Failed to send notification:', notifyError);
+          // Don't fail the invitation if notification fails
+        }
+      } else {
+        console.log('Invited user does not have an account yet, notification will be sent when they sign up');
       }
 
       // Refresh usage counts
@@ -351,7 +359,7 @@ export default function CollaboratorsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerPlaceholder} />
@@ -373,18 +381,12 @@ export default function CollaboratorsScreen() {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
-        ) : error ? (
-          <EmptyState
-            icon="alert-circle-outline"
-            title="Unable to load members"
-            description={error.message || "There was an error loading trip members."}
-          />
         ) : (
           <>
         {/* Collaborator Limit Warning */}
         {!collaboratorAccess.allowed && (
           <LimitWarning
-            type="collaborator"
+            type="collaborators"
             current={usage?.collaboratorCount || 0}
             limit={limits.maxCollaboratorsPerTrip}
             onUpgrade={() => setShowUpgradePrompt(true)}
@@ -691,7 +693,7 @@ export default function CollaboratorsScreen() {
         limit={limits.maxCollaboratorsPerTrip}
         requiredPlan="pro"
       />
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -710,7 +712,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.screenPadding,
-    paddingVertical: Spacing.md,
+    paddingTop: 0,
+    paddingBottom: Spacing.md,
   },
   headerPlaceholder: {
     width: 40,

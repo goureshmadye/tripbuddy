@@ -9,16 +9,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 const CURRENCIES = [
@@ -155,12 +155,6 @@ export default function OnboardingScreen() {
     }
   };
 
-  const handleBack = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    }
-  };
-
   const handleComplete = async () => {
     setLoading(true);
     try {
@@ -214,9 +208,9 @@ export default function OnboardingScreen() {
             <View style={[styles.iconContainer, { backgroundColor: Colors.primary + '15' }]}>
               <Ionicons name="person-outline" size={40} color={Colors.primary} />
             </View>
-            <Text style={[styles.stepTitle, { color: colors.text }]}>What's your name?</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-              This is how you'll appear to your travel companions
+            <Text style={[styles.stepTitle, { color: colors.text }]}>What is your name?</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}> 
+              This is how you will appear to your travel companions
             </Text>
             <Input
               placeholder="Enter your name"
@@ -443,7 +437,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.screenPadding,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.sm,
   },
   headerPlaceholder: {
     width: 40,
