@@ -1,14 +1,15 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Animated,
+  Easing,
+  Image,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 type LoadingScreenProps = {
@@ -24,8 +25,51 @@ export default function LoadingScreen({
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const [progress] = useState(new Animated.Value(0));
   const [progressPercent, setProgressPercent] = useState(0);
+
+  useEffect(() => {
+    // Entrance animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Continuous pulse animation for the logo
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ])
+    );
+    pulseAnimation.start();
+
+    return () => pulseAnimation.stop();
+  }, [fadeAnim, scaleAnim, pulseAnim]);
 
   useEffect(() => {
     if (showProgress) {
@@ -33,6 +77,7 @@ export default function LoadingScreen({
         toValue: 100,
         duration: 3000,
         useNativeDriver: false,
+        easing: Easing.out(Easing.cubic),
       }).start();
 
       const interval = setInterval(() => {
@@ -41,7 +86,7 @@ export default function LoadingScreen({
 
       return () => clearInterval(interval);
     }
-  }, [showProgress]);
+  }, [showProgress, progress]);
 
   const progressWidth = progress.interpolate({
     inputRange: [0, 100],
@@ -49,25 +94,58 @@ export default function LoadingScreen({
   });
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={{...styles.container, backgroundColor: colors.background }}>
       <View style={styles.content}>
-        {/* Logo */}
-        <View style={[styles.logoContainer, { backgroundColor: Colors.primary + '15' }]}>
-          <Ionicons name="airplane" size={48} color={Colors.primary} />
-        </View>
+        {/* Animated Logo */}
+        <Animated.View 
+          style={[
+            styles.logoContainer, 
+            { backgroundColor: Colors.primary + '15' },
+            {
+              opacity: fadeAnim,
+              transform: [
+                { scale: Animated.multiply(scaleAnim, pulseAnim) },
+              ],
+            },
+          ]}
+        >
+          <Image
+            source={require('../assets/images/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+        </Animated.View>
 
         {/* App Name */}
-        <Text style={[styles.appName, { color: colors.text }]}>TripBuddy</Text>
+        <Animated.Text 
+          style={[
+            styles.appName, 
+            { color: colors.text },
+            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          TripBuddy
+        </Animated.Text>
 
         {/* Loading Indicator */}
-        <ActivityIndicator size="large" color={Colors.primary} style={styles.spinner} />
+        <Animated.View style={{ opacity: fadeAnim }}>
+          <ActivityIndicator size="large" color={Colors.primary} style={styles.spinner} />
+        </Animated.View>
 
         {/* Message */}
-        <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
+        <Animated.Text 
+          style={[
+            styles.message, 
+            { color: colors.textSecondary },
+            { opacity: fadeAnim },
+          ]}
+        >
+          {message}
+        </Animated.Text>
 
         {/* Progress Bar */}
         {showProgress && (
-          <View style={styles.progressContainer}>
+          <Animated.View style={[styles.progressContainer, { opacity: fadeAnim }]}>
             <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
               <Animated.View 
                 style={[
@@ -79,10 +157,10 @@ export default function LoadingScreen({
             <Text style={[styles.progressText, { color: colors.textMuted }]}>
               {progressPercent}%
             </Text>
-          </View>
+          </Animated.View>
         )}
       </View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -103,6 +181,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
+  },
+  logoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
   },
   appName: {
     fontSize: FontSizes.heading2,

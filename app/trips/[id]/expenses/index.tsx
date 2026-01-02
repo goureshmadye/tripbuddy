@@ -1,3 +1,4 @@
+import { ScreenContainer, useScreenPadding } from '@/components/screen-container';
 import { EmptyState } from '@/components/ui/empty-state';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -8,20 +9,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 type ExpenseCategory = 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
-
-const { width } = Dimensions.get('window');
 
 type ExpenseWithDetails = Expense & { paidByName: string; category: ExpenseCategory };
 
@@ -53,6 +50,7 @@ export default function ExpensesScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { bottom } = useScreenPadding();
 
   // Auth and user data
   const { user } = useAuth();
@@ -254,7 +252,7 @@ export default function ExpensesScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerPlaceholder} />
@@ -516,13 +514,13 @@ export default function ExpensesScreen() {
 
       {/* FAB */}
       <TouchableOpacity
-        style={[styles.fab, Shadows.lg]}
+        style={[styles.fab, Shadows.lg, { bottom: bottom + Spacing.md }]}
         onPress={handleAddExpense}
         activeOpacity={0.8}
       >
         <Ionicons name="add" size={28} color="#FFFFFF" />
       </TouchableOpacity>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -545,7 +543,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingTop: 0,
+    paddingBottom: Spacing.md,
   },
   headerPlaceholder: {
     width: 40,

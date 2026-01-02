@@ -1,4 +1,5 @@
 import LoadingScreen from '@/components/loading-screen';
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -8,15 +9,12 @@ import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import {
     Alert,
-    Dimensions,
-    SafeAreaView,
+    Image,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
-
-const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -29,7 +27,6 @@ export default function SplashScreen() {
     isOnboardingComplete, 
     isWalkthroughComplete, 
     isGuestMode,
-    isAuthenticated,
     enableGuestMode 
   } = useAuth();
 
@@ -92,12 +89,16 @@ export default function SplashScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       <View style={styles.content}>
         {/* Logo Section - Centered */}
         <View style={styles.logoContainer}>
           <View style={[styles.logoBackground, { backgroundColor: Colors.primary }]}>
-            <Ionicons name="airplane" size={64} color="#FFFFFF" />
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={[styles.appName, { color: colors.text }]}>TripBuddy</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
@@ -156,7 +157,7 @@ export default function SplashScreen() {
           </Text>
         </View>
       </View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.screenPadding,
     justifyContent: 'space-between',
-    paddingTop: height * 0.08,
+    paddingTop: 0,
     paddingBottom: Spacing.xl,
   },
   logoContainer: {
@@ -204,6 +205,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
+  },
+  logoImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
   },
   appName: {
     fontSize: FontSizes.heading1,

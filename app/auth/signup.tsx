@@ -1,34 +1,34 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from "@/components/ui/button";
 import { Divider } from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
 import { SocialButton } from "@/components/ui/social-button";
 import {
-  Colors,
-  FontSizes,
-  FontWeights,
-  Spacing
+    Colors,
+    FontSizes,
+    FontWeights,
+    Spacing
 } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { checkEmailExists } from "@/services/auth";
 import {
-  getPasswordStrength,
-  validateEmail,
-  validatePassword,
-  validateSignupForm,
+    getPasswordStrength,
+    validateEmail,
+    validatePassword,
+    validateSignupForm,
 } from "@/utils/validation";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 export default function SignupScreen() {
@@ -208,7 +208,7 @@ export default function SignupScreen() {
       return;
     }
 
-    // Check email existence one more time
+    // Optionally re-check email existence on submit
     setCheckingEmail(true);
     try {
       const exists = await checkEmailExists(email);
@@ -220,9 +220,10 @@ export default function SignupScreen() {
         return;
       }
     } catch {
-      // Continue with signup
+      // ignore network errors here
+    } finally {
+      setCheckingEmail(false);
     }
-    setCheckingEmail(false);
 
     setLoading(true);
     try {
@@ -272,9 +273,7 @@ export default function SignupScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
@@ -409,7 +408,7 @@ export default function SignupScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -426,7 +425,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
   },
   header: {
-    paddingTop: Spacing.md,
+    paddingTop: 0,
     marginBottom: Spacing.lg,
   },
   headerPlaceholder: {

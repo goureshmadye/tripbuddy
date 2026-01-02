@@ -1,4 +1,6 @@
 import LoadingScreen from '@/components/loading-screen';
+import { CacheManager } from '@/components/offline/offline-components';
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -18,7 +20,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 type SettingItem = {
   id: string;
@@ -44,19 +45,6 @@ export default function SettingsScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
 
   const { signOutUser, isGuestMode, disableGuestMode, firebaseUser, loading, isWalkthroughComplete } = useAuth();
-  
-  // Auth guard
-  if (loading) {
-    return <LoadingScreen message="Loading..." />;
-  }
-  
-  if (!firebaseUser && !isGuestMode) {
-    if (!isWalkthroughComplete) {
-      return <Redirect href="/auth/walkthrough" />;
-    }
-    return <Redirect href="/auth" />;
-  }
-
   const { themeMode, setThemeMode } = useTheme();
   const {
     pushNotifications,
@@ -71,8 +59,21 @@ export default function SettingsScreen() {
     isClearing,
   } = useSettings();
 
-  // Modal state
+  // Modal state - must be called before any conditional returns
   const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [storageModalVisible, setStorageModalVisible] = useState(false);
+  
+  // Auth guard
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+  
+  if (!firebaseUser && !isGuestMode) {
+    if (!isWalkthroughComplete) {
+      return <Redirect href="/auth/walkthrough" />;
+    }
+    return <Redirect href="/auth" />;
+  }
 
   const getThemeLabel = () => {
     const option = THEME_OPTIONS.find(o => o.id === themeMode);
@@ -86,20 +87,21 @@ export default function SettingsScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: isGuestMode ? 'Exit' : 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (isGuestMode) {
-                await disableGuestMode();
-              } else {
-                await signOutUser();
+            text: isGuestMode ? 'Exit' : 'Sign Out',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                if (isGuestMode) {
+                  await disableGuestMode();
+                } else {
+                  await signOutUser();
+                }
+                router.replace('/auth');
+              } catch (err) {
+                console.error('Logout error', err);
+                Alert.alert('Error', 'Unable to sign out. Please try again.');
               }
-              router.replace('/auth');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
-            }
-          }
+            },
         },
       ]
     );
@@ -134,6 +136,7 @@ export default function SettingsScreen() {
       title: 'Data & Storage',
       items: [
         { id: 'offline', icon: 'cloud-offline-outline', label: 'Offline Mode', description: 'Access your trips without internet', type: 'toggle' },
+        { id: 'storage', icon: 'folder-outline', label: 'Manage Offline Storage', description: 'View and clear cached data', type: 'navigation' },
         { id: 'sync', icon: 'sync-outline', label: isSyncing ? 'Syncing...' : 'Sync Now', type: 'navigation' },
         { id: 'cache', icon: 'trash-outline', label: isClearing ? 'Clearing...' : 'Clear Cache', type: 'navigation' },
       ],
@@ -185,6 +188,9 @@ export default function SettingsScreen() {
       case 'theme':
         setThemeModalVisible(true);
         break;
+      case 'storage':
+        setStorageModalVisible(true);
+        break;
       case 'delete':
         handleDeleteAccount();
         break;
@@ -213,7 +219,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -351,20 +357,43 @@ export default function SettingsScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+
+      {/* Storage Management Modal */}
+      <Modal
+        visible={storageModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setStorageModalVisible(false)}
+      >
+        <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => setStorageModalVisible(false)} style={styles.backButton}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Offline Storage</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            <CacheManager onClearComplete={() => setStorageModalVisible(false)} />
+          </ScrollView>
+        </ScreenContainer>
+      </Modal>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.screenPadding,
-    paddingVertical: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
   },
   backButton: {
     width: 44,

@@ -1,3 +1,4 @@
+import { useScreenPadding } from '@/components/screen-container';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { NotificationType } from '@/types/database';
@@ -6,16 +7,12 @@ import * as Haptics from 'expo-haptics';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     Animated,
-    Dimensions,
     Platform,
     Pressable,
     StyleSheet,
     Text,
-    View,
+    View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
 // Types
@@ -99,7 +96,7 @@ function ToastItem({ toast, onHide, index }: ToastItemProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const insets = useSafeAreaInsets();
+  const { topMargin } = useScreenPadding();
   
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -107,6 +104,28 @@ function ToastItem({ toast, onHide, index }: ToastItemProps) {
   
   const config = getToastConfig(toast.type, toast.notificationType);
   const duration = toast.duration ?? 4000;
+
+  const hideWithAnimation = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -100,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scale, {
+        toValue: 0.9,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onHide(toast.id);
+    });
+  }, [onHide, opacity, scale, toast.id, translateY]);
 
   useEffect(() => {
     // Entrance animation
@@ -146,29 +165,7 @@ function ToastItem({ toast, onHide, index }: ToastItemProps) {
     }, duration);
 
     return () => clearTimeout(timer);
-  }, []);
-
-  const hideWithAnimation = () => {
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: -100,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scale, {
-        toValue: 0.9,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onHide(toast.id);
-    });
-  };
+  }, [duration, hideWithAnimation, opacity, scale, toast.type, translateY]);
 
   const handlePress = () => {
     if (toast.onPress) {
@@ -182,7 +179,7 @@ function ToastItem({ toast, onHide, index }: ToastItemProps) {
       style={[
         styles.toastContainer,
         {
-          top: insets.top + Spacing.md + index * 80,
+          top: topMargin + index * 80,
           transform: [{ translateY }, { scale }],
           opacity,
         },

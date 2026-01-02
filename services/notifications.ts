@@ -98,10 +98,21 @@ export const createNotification = async (data: CreateNotificationInput): Promise
   }
 
   const docRef = await addDoc(notificationsCollection, {
-    ...data,
+    // Filter out undefined values - Firebase doesn't accept them
+    userId: data.userId,
+    type: data.type,
+    title: data.title,
+    message: data.message,
     read: false,
     createdAt: Timestamp.now(),
     readAt: null,
+    ...(data.tripId !== undefined && { tripId: data.tripId }),
+    ...(data.expenseId !== undefined && { expenseId: data.expenseId }),
+    ...(data.itineraryId !== undefined && { itineraryId: data.itineraryId }),
+    ...(data.invitationId !== undefined && { invitationId: data.invitationId }),
+    ...(data.actorId !== undefined && { actorId: data.actorId }),
+    ...(data.actorName !== undefined && { actorName: data.actorName }),
+    ...(data.groupKey !== undefined && { groupKey: data.groupKey }),
   });
   
   return docRef.id;
@@ -117,11 +128,21 @@ export const createBulkNotifications = async (
   for (const userId of userIds) {
     const docRef = doc(notificationsCollection);
     batch.set(docRef, {
-      ...data,
+      // Filter out undefined values - Firebase doesn't accept them
       userId,
+      type: data.type,
+      title: data.title,
+      message: data.message,
       read: false,
       createdAt: Timestamp.now(),
       readAt: null,
+      ...(data.tripId !== undefined && { tripId: data.tripId }),
+      ...(data.expenseId !== undefined && { expenseId: data.expenseId }),
+      ...(data.itineraryId !== undefined && { itineraryId: data.itineraryId }),
+      ...(data.invitationId !== undefined && { invitationId: data.invitationId }),
+      ...(data.actorId !== undefined && { actorId: data.actorId }),
+      ...(data.actorName !== undefined && { actorName: data.actorName }),
+      ...(data.groupKey !== undefined && { groupKey: data.groupKey }),
     });
   }
   

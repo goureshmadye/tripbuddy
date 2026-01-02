@@ -1,3 +1,4 @@
+import { useScreenPadding } from '@/components/screen-container';
 import { BorderRadius, Colors, ComponentSizes, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +13,6 @@ import {
     Text,
     View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavItem } from './sidebar-navigation';
 
 interface BottomNavigationProps {
@@ -34,7 +34,7 @@ export function BottomNavigation({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const insets = useSafeAreaInsets();
+  const { bottom } = useScreenPadding();
 
   const handlePress = (key: string) => {
     // Haptic feedback on native platforms
@@ -45,46 +45,41 @@ export function BottomNavigation({
   };
 
   // Use blur on native, fallback to semi-transparent on web
-  const blurIntensity = isDark ? 80 : 60;
+  // Higher intensity for more pronounced glassmorphism effect
+  const blurIntensity = isDark ? 100 : 80;
   const blurTint = isDark ? 'dark' : 'light';
 
   return (
     <View
-      style={[
+        style={[
         styles.container,
         {
-          paddingBottom: insets.bottom > 0 ? insets.bottom : Spacing.sm,
+          paddingBottom: bottom > 0 ? bottom : Spacing.sm,
         },
       ]}
     >
-      {/* Glass effect background */}
+      {/* Glassmorphism background - iOS style */}
       {Platform.OS !== 'web' ? (
         <BlurView
           intensity={blurIntensity}
           tint={blurTint}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, styles.blurBackground]}
         />
       ) : (
         <View
           style={[
             StyleSheet.absoluteFill,
+            styles.blurBackground,
             {
               backgroundColor: isDark 
-                ? 'rgba(15, 23, 42, 0.85)' 
-                : 'rgba(255, 255, 255, 0.85)',
-              backdropFilter: 'blur(20px)',
+                ? 'rgba(15, 23, 42, 0.75)' 
+                : 'rgba(255, 255, 255, 0.75)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
             },
           ]}
         />
       )}
-      
-      {/* Subtle top border */}
-      <View 
-        style={[
-          styles.topBorder, 
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
-        ]} 
-      />
 
       <View style={styles.tabsContainer}>
         {items.map((item) => (
@@ -199,15 +194,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingTop: Spacing.sm,
-    overflow: 'hidden',
+    paddingTop: 0,
+    // Transparent background is essential for glassmorphism effect
+    backgroundColor: 'transparent',
   },
-  topBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
+  blurBackground: {
+    // BlurView handles the glass effect
   },
   tabsContainer: {
     flexDirection: 'row',

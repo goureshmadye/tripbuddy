@@ -1,25 +1,26 @@
 import { firestore } from '@/config/firebase';
+import { cacheTripsData, getCachedTrips } from '@/services/offline';
 import {
-  COLLECTIONS,
-  Expense,
-  ExpenseShare,
-  ItineraryItem,
-  Trip,
-  TripCollaborator,
-  TripDocument,
-  TripInvitation,
-  TripWithDetails,
-  User,
+    COLLECTIONS,
+    Expense,
+    ExpenseShare,
+    ItineraryItem,
+    Trip,
+    TripCollaborator,
+    TripDocument,
+    TripInvitation,
+    TripWithDetails,
+    User,
 } from '@/types/database';
 import {
-  collection,
-  doc,
-  getDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  Timestamp,
-  where,
+    collection,
+    doc,
+    getDoc,
+    onSnapshot,
+    orderBy,
+    query,
+    Timestamp,
+    where,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './use-auth';
@@ -38,6 +39,21 @@ export function useTrips() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  // Load cached trips on mount
+  useEffect(() => {
+    const loadCachedTrips = async () => {
+      try {
+        const cached = await getCachedTrips();
+        if (cached && cached.length > 0) {
+          setTrips(cached);
+        }
+      } catch (err) {
+        console.log('No cached trips found');
+      }
+    };
+    loadCachedTrips();
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -142,6 +158,13 @@ export function useTrips() {
       allTrips.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       setTrips(allTrips);
       setLoading(false);
+      
+      // Cache trips for offline access
+      if (allTrips.length > 0) {
+        cacheTripsData(allTrips).catch((err) => 
+          console.log('Failed to cache trips:', err)
+        );
+      }
     }
 
     return () => {

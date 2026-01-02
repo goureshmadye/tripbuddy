@@ -1,41 +1,45 @@
+import { addToOfflineQueue, cacheTrips, checkNetworkStatus } from '@/services/offline';
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  DocumentData,
-  getDoc,
-  getDocs,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  updateDoc,
-  where
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    DocumentData,
+    getDoc,
+    getDocs,
+    orderBy,
+    query,
+    setDoc,
+    Timestamp,
+    updateDoc,
+    where
 } from 'firebase/firestore';
 import { firestore } from '../config/firebase';
 import {
-  CollaboratorRole,
-  COLLECTIONS,
-  CreateInput,
-  Expense,
-  ExpenseShare,
-  InvitationStatus,
-  ItineraryItem,
-  Trip,
-  TripCollaborator,
-  TripDocument,
-  TripInvitation,
-  User,
-  UserLocation
+    CollaboratorRole,
+    COLLECTIONS,
+    CreateInput,
+    Expense,
+    ExpenseShare,
+    InvitationStatus,
+    ItineraryItem,
+    Trip,
+    TripCollaborator,
+    TripDocument,
+    TripInvitation,
+    User,
+    UserLocation
 } from '../types/database';
 
 // ============================================
 // Generic Firestore Helpers
 // ============================================
 
-// Convert Firestore Timestamp to Date
-export const timestampToDate = (timestamp: Timestamp): Date => timestamp.toDate();
+// Convert Firestore Timestamp to Date (with null safety)
+export const timestampToDate = (timestamp: Timestamp | null | undefined): Date => {
+  if (!timestamp) return new Date();
+  return timestamp.toDate();
+};
 
 // Convert Date to Firestore Timestamp
 export const dateToTimestamp = (date: Date): Timestamp => Timestamp.fromDate(date);
@@ -82,6 +86,36 @@ export const updateUser = async (userId: string, data: Partial<User>): Promise<v
 export const tripsCollection = collection(firestore, COLLECTIONS.TRIPS);
 
 export const createTrip = async (tripData: CreateInput<Trip>): Promise<string> => {
+  // If offline, queue the creation and cache locally
+  const isOnline = await checkNetworkStatus();
+  if (!isOnline) {
+    const tempId = `local_${Date.now()}`;
+    const localTrip: Trip = {
+      id: tempId,
+      title: (tripData as any).title || 'Untitled Trip',
+      startDate: (tripData as any).startDate || new Date(),
+      endDate: (tripData as any).endDate || new Date(),
+      creatorId: (tripData as any).creatorId || '',
+      transportationMode: (tripData as any).transportationMode,
+      tripType: (tripData as any).tripType,
+      createdAt: new Date(),
+    } as Trip;
+
+    // Add to offline queue for sync later
+    await addToOfflineQueue({ type: 'create', collection: COLLECTIONS.TRIPS, data: { tempId, tripData } });
+
+    // Cache locally by appending to cached trips
+    try {
+      const existing = (await import('@/services/offline')).getCachedTrips();
+      const cachedTrips = (await existing) || [];
+      await cacheTrips([...cachedTrips, localTrip]);
+    } catch (err) {
+      console.warn('Failed to cache local trip:', err);
+    }
+
+    return tempId;
+  }
+
   const docRef = doc(tripsCollection);
   await setDoc(docRef, {
     ...tripData,
@@ -123,14 +157,50 @@ export const getUserTrips = async (userId: string): Promise<Trip[]> => {
 
 export const updateTrip = async (tripId: string, data: Partial<Trip>): Promise<void> => {
   const docRef = doc(firestore, COLLECTIONS.TRIPS, tripId);
-  const updateData: DocumentData = { ...data };
+  // Filter out undefined values - Firebase doesn't accept them
+  const updateData: DocumentData = Object.fromEntries(
+    Object.entries(data).filter(([_, v]) => v !== undefined)
+  );
   if (data.startDate) updateData.startDate = dateToTimestamp(data.startDate);
   if (data.endDate) updateData.endDate = dateToTimestamp(data.endDate);
+
+  const isOnline = await checkNetworkStatus();
+  if (!isOnline) {
+    // Queue update for later sync
+    await addToOfflineQueue({ type: 'update', collection: COLLECTIONS.TRIPS, data: { tripId, updateData } });
+
+    // Optimistically update cached trips
+    try {
+      const { getCachedTrips, cacheTrips: cacheTripsData } = await import('@/services/offline');
+      const cached = (await getCachedTrips()) || [];
+      const updated = cached.map((t: any) => (t.id === tripId ? { ...t, ...updateData } : t));
+      await cacheTripsData(updated);
+    } catch (err) {
+      console.warn('Failed to update cached trip locally:', err);
+    }
+    return;
+  }
+
   await updateDoc(docRef, updateData);
 };
 
 export const deleteTrip = async (tripId: string): Promise<void> => {
   const docRef = doc(firestore, COLLECTIONS.TRIPS, tripId);
+  const isOnline = await checkNetworkStatus();
+  if (!isOnline) {
+    await addToOfflineQueue({ type: 'delete', collection: COLLECTIONS.TRIPS, data: { tripId } });
+    // Remove from cached trips
+    try {
+      const { getCachedTrips, cacheTrips: cacheTripsData } = await import('@/services/offline');
+      const cached = (await getCachedTrips()) || [];
+      const filtered = cached.filter((t: any) => t.id !== tripId);
+      await cacheTripsData(filtered);
+    } catch (err) {
+      console.warn('Failed to remove trip from cache locally:', err);
+    }
+    return;
+  }
+
   await deleteDoc(docRef);
 };
 
@@ -199,9 +269,11 @@ export const createInvitation = async (data: {
   tripId: string;
   invitedEmail: string;
   invitedBy: string;
+  inviterName?: string;
+  tripTitle?: string;
   role: CollaboratorRole;
   expiresInDays?: number;
-}): Promise<{ id: string; inviteCode: string }> => {
+}): Promise<{ id: string; inviteCode: string; existingUserId: string | null }> => {
   // Check if there's already a pending invitation for this email and trip
   const existingInvite = await getPendingInvitationByEmail(data.tripId, data.invitedEmail);
   if (existingInvite) {
@@ -234,7 +306,7 @@ export const createInvitation = async (data: {
     respondedAt: null,
   });
 
-  return { id: docRef.id, inviteCode };
+  return { id: docRef.id, inviteCode, existingUserId: existingUser?.id || null };
 };
 
 export const getInvitation = async (invitationId: string): Promise<TripInvitation | null> => {
@@ -252,8 +324,26 @@ export const getInvitation = async (invitationId: string): Promise<TripInvitatio
 };
 
 export const getInvitationByCode = async (inviteCode: string): Promise<TripInvitation | null> => {
-  const q = query(invitationsCollection, where('inviteCode', '==', inviteCode));
-  const snapshot = await getDocs(q);
+  // Normalize the code: uppercase, trim, and ensure TRIP- prefix
+  let normalizedCode = inviteCode.trim().toUpperCase();
+  
+  // If user entered just the code without prefix, add it
+  if (!normalizedCode.startsWith('TRIP-')) {
+    // Try with the TRIP- prefix first
+    normalizedCode = 'TRIP-' + normalizedCode;
+  }
+  
+  // First try with the normalized code (with TRIP- prefix)
+  let q = query(invitationsCollection, where('inviteCode', '==', normalizedCode));
+  let snapshot = await getDocs(q);
+  
+  // If not found and user entered without prefix, also try the original uppercase version
+  if (snapshot.empty && !inviteCode.trim().toUpperCase().startsWith('TRIP-')) {
+    // Maybe the code was stored without prefix (edge case)
+    q = query(invitationsCollection, where('inviteCode', '==', inviteCode.trim().toUpperCase()));
+    snapshot = await getDocs(q);
+  }
+  
   if (snapshot.empty) return null;
   const docSnap = snapshot.docs[0];
   const data = docSnap.data();
@@ -384,6 +474,12 @@ export const declineInvitation = async (invitationId: string): Promise<void> => 
 export const cancelInvitation = async (invitationId: string): Promise<void> => {
   const docRef = doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId);
   await deleteDoc(docRef);
+};
+
+// Update the invitedUserId when a user signs up with the invited email
+export const updateInvitationUserId = async (invitationId: string, userId: string): Promise<void> => {
+  const docRef = doc(firestore, COLLECTIONS.TRIP_INVITATIONS, invitationId);
+  await updateDoc(docRef, { invitedUserId: userId });
 };
 
 export const resendInvitation = async (invitationId: string): Promise<string> => {

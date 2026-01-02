@@ -1,3 +1,4 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -5,10 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 
 export default function NoInternetScreen() {
@@ -28,7 +28,7 @@ export default function NoInternetScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
       <View style={styles.content}>
         {/* Illustration */}
         <View style={[styles.iconContainer, { backgroundColor: Colors.error + '15' }]}>
@@ -39,8 +39,8 @@ export default function NoInternetScreen() {
         <Text style={[styles.title, { color: colors.text }]}>No Internet Connection</Text>
 
         {/* Description */}
-        <Text style={[styles.description, { color: colors.textSecondary }]}>
-          It looks like you're not connected to the internet. Please check your connection and try again.
+        <Text style={[styles.description, { color: colors.textSecondary }]}> 
+          It looks like you are not connected to the internet. Please check your connection and try again.
         </Text>
 
         {/* Tips */}
@@ -85,7 +85,7 @@ export default function NoInternetScreen() {
           />
         </View>
       </View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
