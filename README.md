@@ -58,9 +58,7 @@ npm install
 2. **Start the app:**
 
 ```sh
-npm start
-# or
-expo start
+npx expo start --clear
 ```
 
 3. **Platform-specific:**
