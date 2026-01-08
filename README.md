@@ -19,6 +19,8 @@ TripBuddy is a collaborative, mobile-first travel planning app. It centralizes i
 - **AI-Powered Suggestions:** Get smart itinerary ideas and route optimization (Gemini/OpenAI).
 - **Push Notifications:** Stay updated on trip changes and invites.
 - **Subscription Plans:** Free, Pro, and Teams with feature gating and usage tracking.
+- **Global Pricing:** Automatic currency conversion and localized pricing for subscriptions.
+- **Guest Mode:** Explore the app with limited features before signing up.
 
 ---
 
@@ -29,7 +31,7 @@ TripBuddy is a collaborative, mobile-first travel planning app. It centralizes i
 - **Auth & Storage:** Firebase (Auth, Firestore, Storage, Messaging)
 - **Maps:** Google Maps SDK & Places API
 - **AI:** Gemini/OpenAI API
-- **Payments:** Stripe, Google Pay
+- **Payments:** Razorpay (Native SDK)
 
 ---
 
@@ -66,10 +68,13 @@ expo start
 3. **Platform-specific:**
 
 ```sh
-npm run android   # Android
-npm run ios       # iOS
-npm run web       # Web
+# For development with native modules (Required for Maps & Payments):
+npx expo run:android
+# or
+npx expo run:ios
 ```
+
+> **Note:** Features like Razorpay Payments and Google Maps require a native build. They will **not** work in the standard Expo Go client.
 
 ---
 
@@ -175,7 +180,7 @@ TripBuddy is a mobile-first application designed to streamline travel planning. 
 | Service                      | Purpose                                                  |
 | ---------------------------- | -------------------------------------------------------- |
 | Google Maps SDK & Places API | Rendering maps, autocomplete search, routing.            |
-| RazorPay                     | Payment settlements and subscription processing.         |
+| Razorpay                     | Native SDK for subscription payments and settlements.    |
 | Gemini API                   | AI-powered itinerary suggestions and route optimization. |
 | Firebase Cloud Messaging     | Real-time push notifications.                            |
 | Nylas / MailboxLayer         | Email parsing for auto-importing bookings.               |
@@ -346,26 +351,3 @@ TripBuddy operates on a Freemium SaaS model.
 ### Phase 3: Utility Features (Weeks 9-12)
 
 ### Phase 4: Polish & Pro (Weeks 13-16)
-
-## Version 01 of Final Product
-
-### UI Screenshots
-
-Below are screenshots of the main app screens (Version 01):
-
-<div align="center">
-  <img src="assets/images/trips_screen.jpg" alt="Trips Screen" width="200" />
-  <img src="assets/images/itenary_screen.jpg" alt="Itinerary Screen" width="200" />
-  <img src="assets/images/expenses_screen.jpg" alt="Expenses Screen" width="200" />
-  <img src="assets/images/documents_screen.jpg" alt="Documents Screen" width="200" />
-</div>
-
-<div align="center">
-  <img src="assets/images/maps_screen.jpg" alt="Maps Screen" width="200" />
-  <img src="assets/images/notifications_screen.jpg" alt="Notifications Screen" width="200" />
-  <img src="assets/images/profile_screen.jpg" alt="Profile Screen" width="200" />
-  <img src="assets/images/subscription_screen.jpg" alt="Subscription Screen" width="200" />
-  <img src="assets/images/trip_members_screen.jpg" alt="Trip Members Screen" width="200" />
-</div>
-
----
