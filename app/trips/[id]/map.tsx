@@ -5,6 +5,7 @@ import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useOffline } from '@/hooks/use-offline';
 import { useTrip, useTripItinerary } from '@/hooks/use-trips';
+import { getDirections } from '@/services/directions';
 import { ItineraryItem } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -73,12 +74,13 @@ export default function MapScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const { topMargin } = useScreenPadding();
+  const { topMargin, bottom } = useScreenPadding();
   const mapRef = useRef<any>(null);
 
   const { trip } = useTrip(id);
   const { items, loading, error } = useTripItinerary(id);
   const { isOnline, downloadMapRegion, getCachedMapRegions } = useOffline();
+  
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null);
@@ -87,7 +89,9 @@ export default function MapScreen() {
   const [showRoute, setShowRoute] = useState(false);
   const [isMapSaved, setIsMapSaved] = useState(false);
   const [savingMap, setSavingMap] = useState(false);
-  
+  const [routePoints, setRoutePoints] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
+
   // Check if map region is already saved for this trip
   useEffect(() => {
     const checkSavedMaps = async () => {
@@ -210,8 +214,8 @@ export default function MapScreen() {
     return CATEGORY_ICONS[category || 'other'] || CATEGORY_ICONS.other;
   };
 
-  // Calculate route coordinates for polyline
-  const routeCoordinates = filteredItems
+  // Calculate straight-line coordinates (fallback)
+  const straightLineCoordinates = filteredItems
     .filter(item => item.latitude && item.longitude)
     .map(item => ({
       latitude: item.latitude!,
@@ -274,15 +278,51 @@ export default function MapScreen() {
     }
   };
 
-  const handleOptimizeRoute = () => {
-    if (filteredItems.length < 2) {
-      Alert.alert('Route Optimization', 'Need at least 2 locations to optimize route.');
+  const handleOptimizeRoute = async () => {
+    const validPoints = filteredItems.filter(item => item.latitude && item.longitude);
+    
+    if (validPoints.length < 2) {
+      Alert.alert('Route Optimization', 'Need at least 2 locations to show a route.');
       return;
     }
     
-    setShowRoute(true);
-    fitToMarkers();
-    Alert.alert('Route Optimized', 'Showing the optimized route between all locations.');
+    setCalculatingRoute(true);
+    try {
+      const origin = validPoints[0];
+      const destination = validPoints[validPoints.length - 1];
+      const waypoints = validPoints.slice(1, -1);
+      
+      const points = await getDirections({
+        origin: { latitude: origin.latitude!, longitude: origin.longitude! },
+        destination: { latitude: destination.latitude!, longitude: destination.longitude! },
+        waypoints: waypoints.map(wp => ({ latitude: wp.latitude!, longitude: wp.longitude! })),
+        mode: 'driving'
+      });
+      
+      if (points.length > 0) {
+        setRoutePoints(points);
+        setShowRoute(true);
+        
+        // Fit map to route
+        mapRef.current?.fitToCoordinates(points, {
+          edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
+          animated: true,
+        });
+        
+        Alert.alert('Route Calculated', 'Showing the driving route between your locations.');
+      } else {
+        // Fallback to straight lines if API fails
+        setRoutePoints(straightLineCoordinates);
+        setShowRoute(true);
+        fitToMarkers();
+        Alert.alert('Route Info', 'Could not fetch exact roads. Showing straight lines instead.');
+      }
+    } catch (error) {
+      console.error('Error calculating route:', error);
+      Alert.alert('Error', 'Failed to calculate route.');
+    } finally {
+      setCalculatingRoute(false);
+    }
   };
 
   const handleGetDirections = () => {
@@ -304,10 +344,12 @@ export default function MapScreen() {
     Linking.openURL(url as string);
   };
 
-  // Map will always use light mode (no custom styling)
-
   return (
-    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
+    <ScreenContainer 
+      style={{ ...styles.container, backgroundColor: colors.background }}
+      withTopPadding={false}
+      edges={['left', 'right', 'bottom']}
+    >
       {/* Map View */}
       <View style={styles.mapContainer}>
         <MapViewComponent
@@ -359,15 +401,22 @@ export default function MapScreen() {
           })}
 
           {/* Route polyline */}
-          {showRoute && routeCoordinates.length > 1 && (
+          {showRoute && routePoints.length > 1 && (
             <Polyline
-              coordinates={routeCoordinates}
+              coordinates={routePoints}
               strokeColor={Colors.primary}
-              strokeWidth={3}
-              lineDashPattern={[1]}
+              strokeWidth={4}
             />
           )}
         </MapViewComponent>
+
+        {/* Loading Route Overlay */}
+        {calculatingRoute && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.text }]}>Calculating route...</Text>
+          </View>
+        )}
 
         {/* Loading Overlay */}
         {loading && (
@@ -390,7 +439,12 @@ export default function MapScreen() {
 
         {/* Map Header Overlay */}
         <View style={[styles.mapHeader, { top: topMargin }]}>
-          <View style={styles.headerPlaceholder} />
+          <TouchableOpacity
+            style={[styles.mapButton, { backgroundColor: colors.card }, Shadows.sm]}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
           
           {showSearch ? (
             <View style={[styles.searchContainer, { backgroundColor: colors.card }, Shadows.sm]}>
@@ -497,7 +551,7 @@ export default function MapScreen() {
         style={[
           styles.bottomSheet, 
           { backgroundColor: colors.card },
-          Shadows.lg,
+          // Shadows removed as per request
           {
             transform: [{
               translateY: bottomSheetAnim.interpolate({
@@ -506,6 +560,7 @@ export default function MapScreen() {
               }),
             }],
           },
+          { paddingBottom: Math.max(bottom, Spacing.sm) }
         ]}
       >
         {/* Drag Handle */}
@@ -793,7 +848,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: BorderRadius.xxlarge,
     borderTopRightRadius: BorderRadius.xxlarge,
     paddingTop: 0,
-    paddingBottom: Spacing['2xl'],
     maxHeight: BOTTOM_SHEET_HEIGHT,
     overflow: 'hidden',
   },

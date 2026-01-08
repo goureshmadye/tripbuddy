@@ -13,6 +13,7 @@ export type SubscriptionStatus = 'active' | 'canceled' | 'expired' | 'past_due' 
 // ============================================
 
 export interface PlanLimits {
+  maxTrips: number;
   maxCollaboratorsPerTrip: number;
   maxExpensesPerTrip: number;
   maxDocumentsPerTrip: number;
@@ -57,6 +58,7 @@ export interface PlanInfo {
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   free: {
+    maxTrips: 3,
     maxCollaboratorsPerTrip: 2,
     maxExpensesPerTrip: 10,
     maxDocumentsPerTrip: 5,
@@ -77,6 +79,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     bulkExportEnabled: false,
   },
   pro: {
+    maxTrips: Infinity,
     maxCollaboratorsPerTrip: Infinity,
     maxExpensesPerTrip: Infinity,
     maxDocumentsPerTrip: Infinity,
@@ -97,6 +100,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     bulkExportEnabled: false,
   },
   teams: {
+    maxTrips: Infinity,
     maxCollaboratorsPerTrip: Infinity,
     maxExpensesPerTrip: Infinity,
     maxDocumentsPerTrip: Infinity,
@@ -127,7 +131,7 @@ export const PLANS: PlanInfo[] = [
     pricing: null,
     limits: PLAN_LIMITS.free,
     features: [
-      'Unlimited trip creation',
+      'Up to 3 trips',
       'Up to 2 collaborators per trip',
       'Basic itinerary builder (Day, List, Map views)',
       '10 expense entries per trip',

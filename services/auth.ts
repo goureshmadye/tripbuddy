@@ -3,23 +3,43 @@ import { User } from "@/types/database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
     AuthError,
-    createUserWithEmailAndPassword,
-    fetchSignInMethodsForEmail,
+    createUserWithEmailAndPassword, EmailAuthProvider, fetchSignInMethodsForEmail,
     User as FirebaseUser,
-    GoogleAuthProvider,
-    sendPasswordResetEmail,
+    GoogleAuthProvider, reauthenticateWithCredential, sendPasswordResetEmail,
     signInWithEmailAndPassword,
-    signInWithPopup,
-    updateProfile,
+    signInWithPopup, updatePassword, updateProfile
 } from "firebase/auth";
 import { doc, getDoc, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { Platform } from "react-native";
+import { GUEST_MODE_KEY } from "./guest-mode";
+import { logSecurityEvent, SECURITY_EVENTS } from "./security";
+/**
+ * Change the user's password after verifying the current password.
+ * @param user The current Firebase user object
+ * @param currentPassword The user's current password (input)
+ * @param newPassword The new password to set
+ * @throws Error if the current password is incorrect or update fails
+ */
+export const changePassword = async (
+  user: FirebaseUser,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> => {
+  if (!user.email) throw new Error("User email not found");
+  // Re-authenticate user with current password
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  try {
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
+  } catch (error) {
+    throw new Error(getAuthErrorMessage(error as AuthError));
+  }
+};
 
 // Storage keys
 const ONBOARDING_COMPLETE_KEY = "@tripbuddy/onboarding_complete";
 const WALKTHROUGH_COMPLETE_KEY = "@tripbuddy/walkthrough_complete";
-const GUEST_MODE_KEY = "@tripbuddy/guest_mode";
 
 // ============================================
 // Error Handling
@@ -100,16 +120,79 @@ export const signInWithEmail = async (
   email: string,
   password: string
 ): Promise<FirebaseUser> => {
-  const userCredential = await signInWithEmailAndPassword(
-    auth,
-    email,
-    password
-  );
-  return userCredential.user;
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    // Log successful login
+    await logSecurityEvent(SECURITY_EVENTS.LOGIN_SUCCESS, {
+      userId: userCredential.user.uid,
+      email: email,
+      method: 'email'
+    });
+    return userCredential.user;
+  } catch (error) {
+    // Log failed login attempt
+    await logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILURE, {
+      email: email,
+      method: 'email',
+      error: (error as AuthError).code
+    });
+    throw error;
+  }
 };
 
 export const resetPassword = async (email: string): Promise<void> => {
   await sendPasswordResetEmail(auth, email);
+  // Log password reset request
+  await logSecurityEvent(SECURITY_EVENTS.PASSWORD_RESET_REQUEST, {
+    email: email
+  });
+};
+
+// ============================================
+// Multi-Factor Authentication (MFA)
+// ============================================
+
+export const enableMFA = async (user: FirebaseUser, phoneNumber: string): Promise<void> => {
+  // Note: Firebase MFA requires additional setup and may need server-side verification
+  // This is a basic implementation - in production, implement proper MFA flow
+  try {
+    // Log MFA enable attempt
+    await logSecurityEvent(SECURITY_EVENTS.MFA_ENABLED, {
+      userId: user.uid,
+      phoneNumber: phoneNumber.substring(0, 5) + '****' // Partial logging for privacy
+    });
+
+    // Firebase MFA implementation would go here
+    // Requires: PhoneAuthProvider, RecaptchaVerifier, etc.
+    console.warn('MFA setup requires additional Firebase configuration');
+
+  } catch (error) {
+    await logSecurityEvent(SECURITY_EVENTS.SUSPICIOUS_ACTIVITY, {
+      userId: user.uid,
+      action: 'mfa_setup_failed',
+      error: (error as Error).message
+    });
+    throw error;
+  }
+};
+
+export const disableMFA = async (user: FirebaseUser): Promise<void> => {
+  try {
+    // Log MFA disable
+    await logSecurityEvent(SECURITY_EVENTS.MFA_DISABLED, {
+      userId: user.uid
+    });
+
+    // Firebase MFA disable implementation
+    console.warn('MFA disable requires Firebase Admin SDK on server-side');
+
+  } catch (error) {
+    throw error;
+  }
 };
 
 // ============================================
@@ -257,25 +340,4 @@ export const resetOnboardingState = async (): Promise<void> => {
   await AsyncStorage.removeItem(ONBOARDING_COMPLETE_KEY);
   await AsyncStorage.removeItem(WALKTHROUGH_COMPLETE_KEY);
   await AsyncStorage.removeItem(GUEST_MODE_KEY);
-};
-
-// ============================================
-// Guest Mode Management
-// ============================================
-
-export const setGuestMode = async (enabled: boolean): Promise<void> => {
-  if (enabled) {
-    await AsyncStorage.setItem(GUEST_MODE_KEY, "true");
-  } else {
-    await AsyncStorage.removeItem(GUEST_MODE_KEY);
-  }
-};
-
-export const checkGuestMode = async (): Promise<boolean> => {
-  try {
-    const value = await AsyncStorage.getItem(GUEST_MODE_KEY);
-    return value === "true";
-  } catch {
-    return false;
-  }
 };

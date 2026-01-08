@@ -2,88 +2,98 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection - users can read any user document (for email lookups)
-    // but can only write to their own document
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isTripCreator(tripId) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/trips/$(tripId)).data.creatorId == request.auth.uid;
+    }
+    
+    function isTripCollaborator(tripId) {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/tripCollaborators/$(request.auth.uid + '_' + tripId));
+    }
+    
+    function canAccessTrip(tripId) {
+      return isTripCreator(tripId) || isTripCollaborator(tripId);
+    }
+    
+    // Users collection - users can read/write only their own documents
     match /users/{userId} {
-      // Allow any authenticated user to read user documents (needed for email lookups and collaborator info)
-      allow read: if request.auth != null;
-      // Only allow users to create/update/delete their own document
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
     }
     
     // Trips collection
     match /trips/{tripId} {
-      // Allow read if user is authenticated and is the creator
-      // Note: Collaborator access is checked via tripCollaborators collection
-      allow read: if request.auth != null;
-      
-      // Allow create if authenticated and user is the creator
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorId;
-      
-      // Allow update/delete if user is creator
-      allow update, delete: if request.auth != null && resource.data.creatorId == request.auth.uid;
-      
-      // Subcollections under trips
-      match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null;
-      }
+      allow read: if canAccessTrip(tripId);
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.creatorId;
+      allow update, delete: if isTripCreator(tripId);
     }
     
     // Trip Collaborators collection
     match /tripCollaborators/{collaboratorId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && (
+      allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/trips/$(resource.data.tripId)).data.creatorId == request.auth.uid
+        isTripCreator(resource.data.tripId)
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isTripCreator(resource.data.tripId)
       );
     }
     
-    // Expenses collection (if stored at root level)
-    match /expenses/{expenseId} {
-      allow read, write: if request.auth != null;
+    // Expenses collection (subcollection under trips)
+    match /trips/{tripId}/expenses/{expenseId} {
+      allow read, write: if canAccessTrip(tripId);
     }
     
     // Expense Shares collection
     match /expenseShares/{shareId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated();
     }
     
-    // Itinerary items (if stored at root level)
-    match /itineraryItems/{itemId} {
-      allow read, write: if request.auth != null;
+    // Itinerary items (subcollection under trips)
+    match /trips/{tripId}/itinerary/{itemId} {
+      allow read, write: if canAccessTrip(tripId);
     }
     
-    // Documents collection
-    match /documents/{documentId} {
-      allow read, write: if request.auth != null;
+    // Documents collection (subcollection under trips)
+    match /trips/{tripId}/documents/{documentId} {
+      allow read, write: if canAccessTrip(tripId);
     }
     
     // Notifications collection - users can only access their own notifications
     match /notifications/{notificationId} {
-      // Users can read their own notifications
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // Allow create for any authenticated user (to send notifications to others)
-      allow create: if request.auth != null;
-      
-      // Users can only update/delete their own notifications
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
     // Trip Invitations collection
     match /tripInvitations/{invitationId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Collaborators collection (legacy)
-    match /collaborators/{collaboratorId} {
-      allow read, write: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated();
     }
     
     // Subscriptions collection - users can only access their own subscription
     match /subscriptions/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Security logs collection - only for logging security events
+    match /security_logs/{logId} {
+      allow create: if isAuthenticated();
+      allow read: if false; // No read access for security
     }
   }
 }

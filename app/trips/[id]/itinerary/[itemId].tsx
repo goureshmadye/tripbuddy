@@ -222,7 +222,7 @@ export default function ItineraryItemDetailScreen() {
 
   if (loading) {
     return (
-      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -236,7 +236,7 @@ export default function ItineraryItemDetailScreen() {
 
   if (error) {
     return (
-      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -253,7 +253,7 @@ export default function ItineraryItemDetailScreen() {
 
   if (!item) {
     return (
-      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -269,7 +269,7 @@ export default function ItineraryItemDetailScreen() {
   }
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
       {/* Header */}
       <ScreenHeader
         title={item.title}

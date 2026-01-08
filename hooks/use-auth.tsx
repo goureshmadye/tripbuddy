@@ -1,12 +1,10 @@
 import { auth, firestore } from "@/config/firebase";
 import {
-    checkGuestMode,
     checkOnboardingComplete,
     checkWalkthroughComplete,
     getAuthErrorMessage,
     resetOnboardingState,
     resetPassword as resetPasswordService,
-    setGuestMode as setGuestModeService,
     setOnboardingComplete as setOnboardingCompleteService,
     setWalkthroughComplete as setWalkthroughCompleteService,
     signInWithEmail as signInWithEmailService,
@@ -16,8 +14,9 @@ import {
     uploadProfilePhoto as uploadProfilePhotoService
 } from "@/services/auth";
 import { getTrip, getUserPendingInvitations, updateInvitationUserId } from "@/services/firestore";
+import { checkGuestMode, setGuestMode } from "@/services/guest-mode";
 import { notifyTripInvitation } from "@/services/notifications";
-import { cacheUserSession, getCachedUser } from "@/services/offline";
+import { cacheUserSession, clearCachedSession, getCachedUser } from "@/services/offline";
 import { User } from "@/types/database";
 import {
     AuthError,
@@ -123,71 +122,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setFirebaseUser(fbUser);
 
       if (fbUser) {
-        // Check onboarding status
-        checkOnboardingComplete(fbUser.uid).then(setIsOnboardingComplete);
+        // Check if user is in guest mode
+        const guestMode = await checkGuestMode();
+        setIsGuestMode(guestMode);
 
-        // Set up real-time listener for user document
-        const userDocRef = doc(firestore, "users", fbUser.uid);
+        if (!guestMode) {
+          // Check onboarding status
+          checkOnboardingComplete(fbUser.uid).then(setIsOnboardingComplete);
 
-        const unsubscribeUser = onSnapshot(
-          userDocRef,
-          async (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              const userData: User = {
-                id: docSnap.id,
-                name: data.name || fbUser.displayName || "User",
-                email: data.email || fbUser.email || "",
-                profilePhoto: data.profilePhoto || fbUser.photoURL,
-                defaultCurrency: data.defaultCurrency || "USD",
-                homeCountry: data.homeCountry || null,
-                onboardingComplete: data.onboardingComplete || false,
-                walkthroughComplete: data.walkthroughComplete || false,
-                createdAt: data.createdAt?.toDate() || new Date(),
-              };
-              setUser(userData);
-              setIsOnboardingComplete(data.onboardingComplete || false);
-              
-              // Cache user session for offline access
-              cacheUserSession(userData).catch(console.error);
-            } else {
-              // Create user document if it doesn't exist
-              const newUser: Omit<User, "id"> = {
-                name: fbUser.displayName || "User",
-                email: fbUser.email || "",
-                profilePhoto: fbUser.photoURL || null,
-                defaultCurrency: "USD",
-                homeCountry: null,
-                onboardingComplete: false,
-                walkthroughComplete: false,
-                createdAt: new Date(),
-              };
+          // Set up real-time listener for user document
+          const userDocRef = doc(firestore, "users", fbUser.uid);
 
-              await setDoc(userDocRef, {
-                ...newUser,
-                createdAt: Timestamp.now(),
-              });
+          const unsubscribeUser = onSnapshot(
+            userDocRef,
+            async (docSnap) => {
+              if (docSnap.exists()) {
+                const data = docSnap.data();
+                const userData: User = {
+                  id: docSnap.id,
+                  name: data.name || fbUser.displayName || "User",
+                  email: data.email || fbUser.email || "",
+                  profilePhoto: data.profilePhoto || fbUser.photoURL,
+                  defaultCurrency: data.defaultCurrency || "USD",
+                  homeCountry: data.homeCountry || null,
+                  onboardingComplete: data.onboardingComplete || false,
+                  walkthroughComplete: data.walkthroughComplete || false,
+                  createdAt: data.createdAt?.toDate() || new Date(),
+                };
+                setUser(userData);
+                setIsOnboardingComplete(data.onboardingComplete || false);
+                
+                // Cache user session for offline access
+                cacheUserSession(userData).catch(console.error);
+              } else {
+                // Create user document if it doesn't exist
+                const newUser: Omit<User, "id"> = {
+                  name: fbUser.displayName || "User",
+                  email: fbUser.email || "",
+                  profilePhoto: fbUser.photoURL || null,
+                  defaultCurrency: "USD",
+                  homeCountry: null,
+                  onboardingComplete: false,
+                  walkthroughComplete: false,
+                  createdAt: new Date(),
+                };
 
-              setUser({ id: fbUser.uid, ...newUser });
-              setIsOnboardingComplete(false);
-              
-              // Check for pending invitations for this email and send notifications
-              if (newUser.email) {
-                checkPendingInvitationsForNewUser(fbUser.uid, newUser.email).catch(console.error);
+                await setDoc(userDocRef, {
+                  ...newUser,
+                  createdAt: Timestamp.now(),
+                });
+
+                setUser({ id: fbUser.uid, ...newUser });
+                setIsOnboardingComplete(false);
+                
+                // Check for pending invitations for this email and send notifications
+                if (newUser.email) {
+                  checkPendingInvitationsForNewUser(fbUser.uid, newUser.email).catch(console.error);
+                }
               }
+              setLoading(false);
+            },
+            (error) => {
+              // Only log if it's not a permission error (which is expected when signing out)
+              if (error.code !== 'permission-denied') {
+                console.error("Error listening to user document:", error);
+              }
+              setLoading(false);
             }
-            setLoading(false);
-          },
-          (error) => {
-            // Only log if it's not a permission error (which is expected when signing out)
-            if (error.code !== 'permission-denied') {
-              console.error("Error listening to user document:", error);
-            }
-            setLoading(false);
-          }
-        );
+          );
 
-        return () => unsubscribeUser();
+          return () => unsubscribeUser();
+        } else {
+          // Guest mode - don't set up user document listener
+          setUser(null);
+          setIsOnboardingComplete(false);
+          setLoading(false);
+        }
       } else {
         setUser(null);
         setIsOnboardingComplete(false);
@@ -310,12 +320,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const enableGuestMode = async () => {
-    await setGuestModeService(true);
+    await setGuestMode(true);
     setIsGuestMode(true);
+    // Clear user data and cached session for privacy when entering guest mode
+    setUser(null);
+    await clearCachedSession();
   };
 
   const disableGuestMode = async () => {
-    await setGuestModeService(false);
+    await setGuestMode(false);
     setIsGuestMode(false);
   };
 

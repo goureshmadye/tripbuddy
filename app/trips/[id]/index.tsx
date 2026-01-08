@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useTrip, useTripCollaborators, useTripExpenses, useTripItinerary } from '@/hooks/use-trips';
+import { useTrip, useTripCollaborators, useTripDocuments, useTripExpenses, useTripItinerary } from '@/hooks/use-trips';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
@@ -53,7 +53,8 @@ export default function TripOverviewScreen() {
   const { trip, loading: tripLoading, error: tripError } = useTrip(id);
   const { items: itinerary, loading: itineraryLoading } = useTripItinerary(id);
   const { collaborators, loading: collabLoading } = useTripCollaborators(id);
-  const { expenses, totalExpenses, loading: expensesLoading } = useTripExpenses(id);
+  const { totalExpenses, loading: expensesLoading } = useTripExpenses(id);
+  const { documents } = useTripDocuments(id);
 
   // Get currency - prefer trip currency, fall back to user's default currency
   const currency = trip?.currency || user?.defaultCurrency || 'USD';
@@ -295,7 +296,7 @@ export default function TripOverviewScreen() {
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Ionicons name="document-outline" size={24} color={Colors.info} />
-              <Text style={[styles.statNumber, { color: colors.text }]}>{expenses.length}</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>{documents.length}</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Records</Text>
             </View>
           </View>

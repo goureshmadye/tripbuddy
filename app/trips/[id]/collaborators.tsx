@@ -7,15 +7,15 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSubscription, useTripUsage } from '@/hooks/use-subscription';
 import { useTrip, useTripCollaborators, useTripInvitations } from '@/hooks/use-trips';
 import {
-  cancelInvitation,
-  createInvitation,
-  removeCollaborator,
-  resendInvitation,
-  updateCollaboratorRole
+    cancelInvitation,
+    createInvitation,
+    removeCollaborator,
+    resendInvitation,
+    updateCollaboratorRole
 } from '@/services/firestore';
 import {
-  notifyCollaboratorRemoved,
-  notifyTripInvitation
+    notifyCollaboratorRemoved,
+    notifyTripInvitation
 } from '@/services/notifications';
 import { CollaboratorRole, TripCollaborator, TripInvitation } from '@/types/database';
 import { validateEmail } from '@/utils/validation';
@@ -24,15 +24,15 @@ import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 type CollaboratorWithProfile = TripCollaborator & { name: string; email: string };
@@ -121,7 +121,7 @@ export default function CollaboratorsScreen() {
     try {
       await Clipboard.setStringAsync(code);
       Alert.alert('Copied!', 'Invite code copied to clipboard');
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to copy code');
     }
   };
@@ -711,7 +711,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: 0,
     paddingBottom: Spacing.md,
   },
@@ -734,7 +733,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing['2xl'],
   },
   shareCard: {

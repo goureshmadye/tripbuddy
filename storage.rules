@@ -3,27 +3,40 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    // Helper function to check if user is authenticated
+    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Trip documents storage
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function canAccessTrip(tripId) {
+      return isAuthenticated() && (
+        firestore.exists(/databases/(default)/documents/trips/$(tripId)) &&
+        (
+          firestore.get(/databases/(default)/documents/trips/$(tripId)).data.creatorId == request.auth.uid ||
+          firestore.exists(/databases/(default)/documents/tripCollaborators/$(request.auth.uid + '_' + tripId))
+        )
+      );
+    }
+    
+    // Trip documents storage - only trip collaborators can access
     match /trips/{tripId}/documents/{documentId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if canAccessTrip(tripId);
     }
     
-    // User profile photos
+    // User profile photos - only the user can access their own
     match /users/{userId}/profile/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAuthenticated(); // Allow read for profile display
+      allow write: if isOwner(userId);
     }
     
-    // Profile photos (alternative path)
+    // Profile photos (alternative path) - only the user can access their own
     match /profile-photos/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAuthenticated(); // Allow read for profile display
+      allow write: if isOwner(userId);
     }
   }
 }

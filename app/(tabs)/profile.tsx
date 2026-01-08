@@ -142,7 +142,7 @@ export default function ProfileScreen() {
               await signOutUser();
               await disableGuestMode();
               router.replace('/auth');
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to sign out. Please try again.');
             }
           }

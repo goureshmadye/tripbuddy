@@ -17,7 +17,7 @@ import {
     View
 } from 'react-native';
 
-type ViewMode = 'timeline' | 'map' | 'list';
+type ViewMode = 'timeline' | 'map';
 
 const CATEGORY_CONFIG: Record<ItineraryCategory | string, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
   activity: { icon: 'flash-outline', color: '#8B5CF6' },
@@ -84,7 +84,7 @@ export default function ItineraryScreen() {
   };
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
       {/* Header */}
       <ScreenHeader title="Itinerary" showBack={false} />
 
@@ -123,23 +123,6 @@ export default function ItineraryScreen() {
             styles.toggleText,
             { color: viewMode === 'map' ? '#FFFFFF' : colors.textSecondary },
           ]}>Map</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.toggleButton,
-            viewMode === 'list' && { backgroundColor: Colors.primary },
-          ]}
-          onPress={() => setViewMode('list')}
-        >
-          <Ionicons 
-            name="list-outline" 
-            size={18} 
-            color={viewMode === 'list' ? '#FFFFFF' : colors.textSecondary} 
-          />
-          <Text style={[
-            styles.toggleText,
-            { color: viewMode === 'list' ? '#FFFFFF' : colors.textSecondary },
-          ]}>List</Text>
         </TouchableOpacity>
       </View>
 
@@ -201,7 +184,7 @@ export default function ItineraryScreen() {
             actionLabel="Add Activity"
             onAction={handleAddItem}
           />
-        ) : viewMode === 'timeline' ? (
+        ) : (
           // Timeline View
           <View style={styles.timeline}>
             {(groupedItems[days[selectedDay]] || [])
@@ -256,46 +239,6 @@ export default function ItineraryScreen() {
                 );
               })}
           </View>
-        ) : (
-          // List View
-          <View style={styles.listView}>
-            {(groupedItems[days[selectedDay]] || [])
-              .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
-              .map((item) => {
-                const config = getCategoryConfig(item.category);
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.listItem,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                    onPress={() => handleItemPress(item.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.listIcon, { backgroundColor: config.color + '15' }]}>
-                      <Ionicons name={config.icon} size={24} color={config.color} />
-                    </View>
-                    <View style={styles.listContent}>
-                      <Text style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
-                      <Text style={[styles.itemTime, { color: colors.textSecondary }]}>
-                        {formatTime(item.startTime!)}
-                        {item.endTime && ` - ${formatTime(item.endTime)}`}
-                      </Text>
-                      {item.location && (
-                        <View style={styles.locationRow}>
-                          <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-                          <Text style={[styles.locationTextSmall, { color: colors.textMuted }]}>
-                            {item.location}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-                  </TouchableOpacity>
-                );
-              })}
-          </View>
         )}
       </ScrollView>
 
@@ -344,10 +287,12 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   toggleButton: {
+    flex: 1, // Make buttons equal width
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center', // Center content
     paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    // paddingHorizontal: Spacing.md, // Removed horizontal padding to fit content better
     borderRadius: BorderRadius.pill,
     gap: Spacing.xs,
   },
@@ -441,27 +386,6 @@ const styles = StyleSheet.create({
   },
   locationTextSmall: {
     fontSize: FontSizes.caption,
-  },
-  listView: {
-    gap: Spacing.md,
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.cardPadding,
-    borderRadius: BorderRadius.card,
-    borderWidth: 1,
-  },
-  listIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  listContent: {
-    flex: 1,
   },
   fab: {
     position: 'absolute',

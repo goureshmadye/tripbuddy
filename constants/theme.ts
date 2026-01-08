@@ -100,34 +100,35 @@ export const Colors = {
 };
 
 // ============================================
-// Spacing System (4px base unit)
+// Spacing System (8pt base unit)
 // ============================================
 export const Spacing = {
   xs: 4,      // Extra small
   sm: 8,      // Small
-  md: 12,     // Medium
+  md: 16,     // Medium (Standard spacing between form fields)
   base: 16,   // Base unit / Screen padding
-  lg: 20,     // Large / Section gap
-  xl: 24,     // Extra large
-  '2xl': 32,  // 2x Extra large
-  '3xl': 40,  // 3x Extra large
+  lg: 24,     // Large / Section gap
+  xl: 32,     // Extra large
+  '2xl': 40,  // 2x Extra large
+  '3xl': 48,  // 3x Extra large
   // Legacy support
-  xxl: 32,
-  xxxl: 40,
+  xxl: 40,
+  xxxl: 48,
   // Semantic spacing
   screenPadding: 16,
   cardPadding: 16,
-  sectionGap: 20,
+  sectionGap: 24,
+  labelGap: 8,
 };
 
 // ============================================
-// Border Radius - Highly rounded, modern aesthetic
+// Border Radius - Consistent Roundness System
 // ============================================
 export const BorderRadius = {
   // Base values
-  small: 8,
-  medium: 12,
-  large: 16,
+  small: 8,   // Chips, tags
+  medium: 12, // Inputs, buttons, cards
+  large: 16,  // Modals, bottom sheets
   xlarge: 20,
   xxlarge: 24,
   pill: 999,
@@ -138,17 +139,17 @@ export const BorderRadius = {
   xl: 20,
   xxl: 24,
   full: 999,
-  // Application-specific
-  button: 16,
-  card: 20,
-  imageCard: 16,
+  // Application-specific matches
+  button: 12,
+  card: 12,
+  imageCard: 12,
   categoryIcon: 12,
-  modal: 24,
-  searchBar: 16,
+  modal: 16,
+  searchBar: 12,
   tabs: 12,
   input: 12,
   chip: 8,
-  badge: 6,
+  badge: 8,
 };
 
 // ============================================
@@ -156,11 +157,12 @@ export const BorderRadius = {
 // ============================================
 export const FontSizes = {
   micro: 10,      // Micro text
-  caption: 12,    // Captions, badges
+  caption: 12,    // Captions, helper text
   bodySmall: 14,  // Small body text
-  body: 16,       // Default body
+  body: 16,       // Default body, Button text
+  sectionHeading: 18, // Section Heading
   heading3: 20,   // H3
-  heading2: 24,   // H2
+  heading2: 24,   // Title / Screen Heading
   heading1: 28,   // H1
   // Legacy support
   xs: 12,
@@ -175,8 +177,8 @@ export const FontSizes = {
 
 export const FontWeights = {
   regular: '400' as const,
-  medium: '500' as const,
-  semibold: '600' as const,
+  medium: '500' as const, // Button text
+  semibold: '600' as const, // Headings
   bold: '700' as const,
 };
 
@@ -259,12 +261,12 @@ export const Shadows = {
 // ============================================
 export const ComponentSizes = {
   // Buttons
-  buttonHeight: 56,
-  buttonHeightSecondary: 48,
+  buttonHeight: 48,
+  buttonHeightSecondary: 44,
   iconButtonSize: 44,
   
   // Inputs
-  inputHeight: 52,
+  inputHeight: 48,
   searchBarHeight: 48,
   
   // Navigation

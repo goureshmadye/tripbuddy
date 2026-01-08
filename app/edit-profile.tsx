@@ -5,21 +5,22 @@ import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { changePassword } from '@/services/auth';
 import { updateUser } from '@/services/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 // Currency and country mapping
@@ -219,7 +220,7 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all password fields');
       return;
@@ -235,15 +236,20 @@ export default function EditProfileScreen() {
       return;
     }
 
+    if (!firebaseUser) {
+      Alert.alert('Error', 'No authenticated user.');
+      return;
+    }
+
     try {
-      // TODO: Implement actual password change with Firebase
+      await changePassword(firebaseUser, currentPassword, newPassword);
       Alert.alert('Success', 'Password changed successfully');
       setChangePasswordModalVisible(false);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch {
-      Alert.alert('Error', 'Failed to change password');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to change password');
     }
   };
 

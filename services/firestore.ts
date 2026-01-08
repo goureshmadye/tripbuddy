@@ -32,6 +32,23 @@ import {
 } from '../types/database';
 
 // ============================================
+// Security Utilities
+// ============================================
+
+// Sanitize document IDs and user inputs to prevent injection
+export const sanitizeDocumentId = (id: string): string => {
+  if (typeof id !== 'string') return '';
+  // Remove potentially dangerous characters and limit length
+  return id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 100);
+};
+
+export const sanitizeUserInput = (input: string): string => {
+  if (typeof input !== 'string') return '';
+  // Basic sanitization - remove script tags and limit length
+  return input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').substring(0, 1000);
+};
+
+// ============================================
 // Generic Firestore Helpers
 // ============================================
 
@@ -127,7 +144,8 @@ export const createTrip = async (tripData: CreateInput<Trip>): Promise<string> =
 };
 
 export const getTrip = async (tripId: string): Promise<Trip | null> => {
-  const docRef = doc(firestore, COLLECTIONS.TRIPS, tripId);
+  const sanitizedId = sanitizeDocumentId(tripId);
+  const docRef = doc(firestore, COLLECTIONS.TRIPS, sanitizedId);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) return null;
   const data = docSnap.data();

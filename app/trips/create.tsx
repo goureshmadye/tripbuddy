@@ -7,24 +7,24 @@ import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { addCollaborator, createItineraryItem, createTrip, getUserByEmail } from '@/services/firestore';
 import { convertToItineraryItems, GeneratedTripPlan, generateTripPlan } from '@/services/gemini';
+import { autocompletePlaces, getPlaceDetails, PlaceSuggestion } from '@/services/google-places';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    FlatList,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
-import { GooglePlacesAutocomplete, GooglePlacesAutocompleteRef } from 'react-native-google-places-autocomplete';
-
-const GOOGLE_PLACES_API_KEY = 'AIzaSyBsdUhzX0MnaEY8WbduCribLEstC0T8_dU';
 
 // Currency configuration with symbols and budget thresholds
 const CURRENCY_CONFIG: Record<string, {
@@ -170,7 +170,6 @@ export default function CreateTripScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
 
   const { user } = useAuth();
-  const placesRef = useRef<GooglePlacesAutocompleteRef>(null);
 
   // Get budget ranges based on user's currency
   const userCurrency = user?.defaultCurrency || 'USD';
@@ -184,10 +183,17 @@ export default function CreateTripScreen() {
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState<DestinationDetails | null>(null);
   const [destinationQuery, setDestinationQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+
+  // Form validation errors
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Step 2: Preferences
   const [tripType, setTripType] = useState('');
@@ -205,7 +211,60 @@ export default function CreateTripScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateWithAI, setGenerateWithAI] = useState(true);
 
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout>>(null);
+  const handleQueryChange = useCallback((text: string) => {
+    setDestinationQuery(text);
+    if (!text.trim()) {
+      setDestination(null);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(async () => {
+      setAutocompleteLoading(true);
+      const results = await autocompletePlaces(text);
+      setSuggestions(results);
+      setShowSuggestions(true);
+      setAutocompleteLoading(false);
+    }, 300);
+  }, []);
+
+  // Form validation
+  const validateStep = (stepNumber: number): boolean => {
+    const errors: {[key: string]: string} = {};
+
+    if (stepNumber === 1) {
+      if (!title.trim()) {
+        errors.title = 'Trip title is required';
+      }
+      if (!destination) {
+        errors.destination = 'Please select a destination';
+      }
+      if (startDate >= endDate) {
+        errors.dates = 'End date must be after start date';
+      }
+    }
+
+    if (stepNumber === 2) {
+      if (!tripType) {
+        errors.tripType = 'Please select a trip type';
+      }
+      if (!transportMode) {
+        errors.transportMode = 'Please select a transport mode';
+      }
+      if (!budgetRange) {
+        errors.budgetRange = 'Please select a budget range';
+      }
+      if (!travelerCount) {
+        errors.travelerCount = 'Please select number of travelers';
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -213,37 +272,6 @@ export default function CreateTripScreen() {
       day: 'numeric',
       year: 'numeric',
     });
-  };
-
-  const validateStep = (): boolean => {
-    switch (step) {
-      case 1:
-        if (!title.trim()) {
-          Alert.alert('Required', 'Please enter a trip title');
-          return false;
-        }
-        if (!destination) {
-          Alert.alert('Required', 'Please select a destination from the suggestions');
-          return false;
-        }
-        if (endDate < startDate) {
-          Alert.alert('Invalid Dates', 'End date must be after start date');
-          return false;
-        }
-        return true;
-      case 2:
-        // Step 2 is optional, allow continuing
-        return true;
-      case 3:
-        // Step 3 is optional, allow continuing
-        return true;
-      case 4:
-        return true;
-      case 5:
-        return true;
-      default:
-        return true;
-    }
   };
 
   // Generate AI trip plan
@@ -279,7 +307,7 @@ export default function CreateTripScreen() {
   };
 
   const handleNext = async () => {
-    if (!validateStep()) return;
+    if (!validateStep(step)) return;
     
     // When moving to step 5, generate the plan if enabled
     if (step === 4 && generateWithAI && !generatedPlan) {
@@ -329,7 +357,7 @@ export default function CreateTripScreen() {
       return;
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       // Create trip in Firestore
       const tripId = await createTrip({
@@ -394,7 +422,7 @@ export default function CreateTripScreen() {
       console.error('Create trip error:', error);
       Alert.alert('Error', 'Failed to create trip. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -416,8 +444,14 @@ export default function CreateTripScreen() {
                 label="Trip Title"
                 placeholder="e.g., Summer in Paris"
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(text) => {
+                  setTitle(text);
+                  if (formErrors.title) {
+                    setFormErrors(prev => ({ ...prev, title: '' }));
+                  }
+                }}
                 leftIcon="airplane-outline"
+                error={formErrors.title}
               />
 
               {/* Google Places Autocomplete for Destination */}
@@ -425,106 +459,73 @@ export default function CreateTripScreen() {
                 <Text style={[styles.inputLabel, { color: colors.text }]}>Destination</Text>
                 <View style={[styles.placesContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
                   <Ionicons name="location-outline" size={20} color={Colors.primary} style={styles.locationIcon} />
-                  <GooglePlacesAutocomplete
-                    ref={placesRef}
+                  <TextInput
+                    style={[styles.textInput, { color: colors.text }]}
                     placeholder="Search for a city or place"
-                    onPress={(data, details = null) => {
-                      const location = details?.geometry?.location;
-                      setDestination({
-                        name: data.description,
-                        placeId: data.place_id,
-                        latitude: location?.lat || null,
-                        longitude: location?.lng || null,
-                        country: details?.address_components?.find(
-                          c => c.types.includes('country')
-                        )?.long_name,
-                        formattedAddress: details?.formatted_address,
-                      });
-                      setDestinationQuery(data.description);
-                    }}
-                    query={{
-                      key: GOOGLE_PLACES_API_KEY,
-                      language: 'en',
-                      types: '(cities)',
-                    }}
-                    fetchDetails={true}
-                    textInputProps={{
-                      placeholderTextColor: colors.textMuted,
-                      value: destinationQuery,
-                      onChangeText: (text) => {
-                        setDestinationQuery(text);
-                        if (!text) {
-                          setDestination(null);
-                        }
-                      },
-                    }}
-                    styles={{
-                      container: {
-                        flex: 1,
-                      },
-                      textInput: {
-                        backgroundColor: 'transparent',
-                        color: colors.text,
-                        fontSize: FontSizes.md,
-                        height: 44,
-                        paddingVertical: 0,
-                      },
-                      listView: {
-                        backgroundColor: colors.card,
-                        borderRadius: BorderRadius.lg,
-                        marginTop: Spacing.xs,
-                        ...Platform.select({
-                          ios: {
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.1,
-                            shadowRadius: 4,
-                          },
-                          android: {
-                            elevation: 4,
-                          },
-                        }),
-                      },
-                      row: {
-                        backgroundColor: colors.card,
-                        padding: Spacing.md,
-                        borderBottomWidth: 1,
-                        borderBottomColor: colors.border,
-                      },
-                      description: {
-                        color: colors.text,
-                        fontSize: FontSizes.sm,
-                      },
-                      poweredContainer: {
-                        display: 'none',
-                      },
-                      powered: {
-                        display: 'none',
-                      },
-                    }}
-                    enablePoweredByContainer={false}
-                    debounce={300}
-                    minLength={2}
-                    nearbyPlacesAPI="GooglePlacesSearch"
-                    disableScroll={true}
-                    listViewDisplayed="auto"
-                    renderLeftButton={() => null}
-                    renderRightButton={() => 
-                      destinationQuery ? (
-                        <TouchableOpacity
-                          onPress={() => {
-                            setDestinationQuery('');
-                            setDestination(null);
-                            placesRef.current?.clear();
-                          }}
-                          style={styles.clearButton}
-                        >
-                          <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-                        </TouchableOpacity>
-                      ) : null
-                    }
+                    placeholderTextColor={colors.textMuted}
+                    value={destinationQuery}
+                    onChangeText={handleQueryChange}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   />
+                  {autocompleteLoading && <ActivityIndicator size="small" color={Colors.primary} style={styles.loading} />}
+                  {destinationQuery ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDestinationQuery('');
+                        setDestination(null);
+                        setSuggestions([]);
+                        setShowSuggestions(false);
+                      }}
+                      style={styles.clearInputButton}
+                      hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                    >
+                      <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
+                {showSuggestions && suggestions.length > 0 && (
+                  <FlatList
+                    style={[styles.listView, { backgroundColor: colors.card }]}
+                    data={suggestions}
+                    keyExtractor={(item) => item.place_id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[styles.row, { borderBottomColor: colors.border }]}
+                        onPress={async () => {
+                          const details = await getPlaceDetails(item.place_id);
+                          if (details) {
+                            setDestination({
+                              name: item.description,
+                              placeId: item.place_id,
+                              latitude: details.geometry.location.lat,
+                              longitude: details.geometry.location.lng,
+                              country: details.address_components.find(c => c.types.includes('country'))?.long_name,
+                              formattedAddress: details.formatted_address,
+                            });
+                          }
+                          setDestinationQuery(item.description);
+                          setShowSuggestions(false);
+                          setSuggestions([]);
+                        }}
+                      >
+                        <Text style={[styles.description, { color: colors.text }]}>
+                          {item.structured_formatting?.main_text || item.description}
+                        </Text>
+                        {item.structured_formatting?.secondary_text && (
+                          <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
+                            {item.structured_formatting.secondary_text}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+                {showSuggestions && suggestions.length > 0 && (
+                  <Text style={[styles.poweredBy, { color: colors.textMuted }]}>
+                    Powered by Google
+                  </Text>
+                )}
                 {destination && (
                   <View style={[styles.selectedDestination, { backgroundColor: Colors.primary + '10' }]}>
                     <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
@@ -534,6 +535,11 @@ export default function CreateTripScreen() {
                   </View>
                 )}
               </View>
+              {formErrors.destination && (
+                <Text style={[styles.errorText, { color: Colors.error }]}>
+                  {formErrors.destination}
+                </Text>
+              )}
 
               {/* Date Pickers */}
               <View style={styles.dateSection}>
@@ -564,6 +570,11 @@ export default function CreateTripScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              {formErrors.dates && (
+                <Text style={[styles.errorText, { color: Colors.error }]}>
+                  {formErrors.dates}
+                </Text>
+              )}
 
               {showStartPicker && (
                 <DateTimePicker
@@ -1063,7 +1074,7 @@ export default function CreateTripScreen() {
   };
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -1117,7 +1128,7 @@ export default function CreateTripScreen() {
               <Button
                 title={step === totalSteps ? "Create Trip" : isGenerating ? "Generating..." : "Continue"}
                 onPress={step === totalSteps ? handleCreate : handleNext}
-                loading={loading}
+                loading={step === totalSteps ? isSubmitting : loading}
                 disabled={isGenerating}
                 size="lg"
                 fullWidth
@@ -1620,5 +1631,58 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.medium,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: FontSizes.md,
+    height: 44,
+    paddingVertical: 0,
+  },
+  loading: {
+    position: 'absolute',
+    right: 40,
+    top: 12,
+  },
+  clearInputButton: {
+    position: 'absolute',
+    right: 10,
+    top: 12,
+  },
+  listView: {
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.xs,
+    maxHeight: 200,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  row: {
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    minHeight: 44,
+  },
+  description: {
+    fontSize: FontSizes.sm,
+  },
+  secondaryText: {
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  poweredBy: {
+    fontSize: FontSizes.xs,
+    textAlign: 'center',
+    marginTop: Spacing.xs,
+  },
+  errorText: {
+    fontSize: FontSizes.sm,
+    marginTop: Spacing.xs,
   },
 });

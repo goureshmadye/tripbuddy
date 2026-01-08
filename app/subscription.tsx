@@ -1,14 +1,19 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
+import { useGlobalPricing } from '@/hooks/use-global-pricing';
 import { usePlans, useSubscription } from '@/hooks/use-subscription';
 import { useAppColorScheme } from '@/hooks/use-theme';
+import { useUsageLimits } from '@/hooks/use-usage-limits';
+import { PaymentService } from '@/services/payment';
+import { PricingService } from '@/services/pricing';
 import { BillingCycle, PlanInfo, SubscriptionPlan } from '@/types/subscription';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Alert,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Switch,
@@ -23,27 +28,50 @@ export default function SubscriptionScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
+  const { user } = useAuth();
   const { plans, currentPlan, currentPlanInfo } = usePlans();
   const { subscription, upgradePlan, cancelPlan, reactivatePlan, daysUntilRenewal } = useSubscription();
+  const { usage } = useUsageLimits();
 
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('yearly');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const getPrice = (plan: PlanInfo) => {
-    if (!plan.pricing) return 'Free';
-    const price = billingCycle === 'yearly' ? plan.pricing.yearly : plan.pricing.monthly;
-    const period = billingCycle === 'yearly' ? '/year' : '/month';
-    return `$${price}${period}`;
+  const getButtonText = (plan: SubscriptionPlan) => {
+    if (plan === currentPlan) return 'Current Plan';
+    if (plan === 'free') return 'Downgrade';
+    if (currentPlan === 'free') return 'Upgrade';
+    if (plan === 'teams' && currentPlan === 'pro') return 'Upgrade';
+    return 'Switch';
   };
 
-  const getSavings = (plan: PlanInfo) => {
-    if (!plan.pricing) return null;
-    const monthlyTotal = plan.pricing.monthly * 12;
-    const savings = monthlyTotal - plan.pricing.yearly;
-    if (savings > 0) {
-      return `Save $${savings.toFixed(2)}/year`;
-    }
-    return null;
+  const isCurrentPlan = (plan: SubscriptionPlan) => plan === currentPlan;
+
+  // Helper component to handle price conversion per plan
+  const PlanPriceDisplay = ({ plan, billingCycle }: { plan: PlanInfo, billingCycle: BillingCycle }) => {
+    // Only convert if not free
+    const basePrice = plan.pricing ? (billingCycle === 'yearly' ? plan.pricing.yearly : plan.pricing.monthly) : 0;
+    
+    // Use the hook - ensure we check for free plan
+    const { displayAmount } = useGlobalPricing(basePrice);
+    
+    if (!plan.pricing) return <Text style={[styles.price, { color: colors.text }]}>Free</Text>;
+    
+    const period = billingCycle === 'yearly' ? '/year' : '/month';
+    return <Text style={[styles.price, { color: colors.text }]}>{displayAmount}{period}</Text>;
+  };
+
+  // Helper for savings display
+  const SavingsDisplay = ({ plan }: { plan: PlanInfo }) => {
+    // consistently call hook
+    const monthlyTotal = plan.pricing ? plan.pricing.monthly * 12 : 0;
+    const yearlyTotal = plan.pricing ? plan.pricing.yearly : 0;
+    const savingsBase = Math.max(0, monthlyTotal - yearlyTotal);
+    
+    const { displayAmount } = useGlobalPricing(savingsBase);
+    
+    if (!plan.pricing || savingsBase <= 0) return null;
+    
+    return <Text style={[styles.savings, { color: Colors.success }]}>Save {displayAmount}/year</Text>;
   };
 
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
@@ -72,23 +100,58 @@ export default function SubscriptionScreen() {
 
     // Upgrade flow
     setIsProcessing(true);
-    // In a real app, this would open Stripe checkout
-    await upgradePlan(plan, billingCycle);
-    setIsProcessing(false);
+
+    try {
+
+
+      // 1. Get Plan Details & Dynamic Price
+      const targetPlan = plans.find(p => p.id === plan);
+      if (!targetPlan || !targetPlan.pricing) {
+        throw new Error("Invalid plan selected");
+      }
+      
+      const basePrice = billingCycle === 'yearly' ? targetPlan.pricing.yearly : targetPlan.pricing.monthly;
+      const userCurrency = user?.defaultCurrency || 'USD';
+      
+      // Calculate local price (returns amount in subunits, e.g. paise)
+      const localPrice = PricingService.calculateLocalPrice(basePrice * 100, userCurrency);
+
+      // 2. Open Razorpay Checkout
+      await PaymentService.startPayment({
+        description: `${targetPlan.name} (${billingCycle})`,
+        image: 'https://cdn-icons-png.flaticon.com/512/3177/3177440.png', // TripBuddy icon placeholder
+        currency: localPrice.currency,
+        amount: localPrice.amount, // already in subunits
+        name: 'TripBuddy',
+        prefill: {
+          email: user?.email || 'user@example.com',
+          contact: '', // can pull from profile if available
+          name: user?.name || 'Traveler',
+        },
+        theme: { color: Colors.primary }
+      });
+
+      // 3. Success -> Update Subscription
+      await upgradePlan(plan, billingCycle);
+      Alert.alert('Success', `Welcome to ${targetPlan.name}!`);
+      
+    } catch (error: any) {
+       // Handle Cancellation or Failure
+       if (error.code && error.description) {
+         Alert.alert('Payment Failed', error.description);
+       } else {
+         console.error(error);
+         Alert.alert('Error', 'Something went wrong during checkout.');
+       }
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const getButtonText = (plan: SubscriptionPlan) => {
-    if (plan === currentPlan) return 'Current Plan';
-    if (plan === 'free') return 'Downgrade';
-    if (currentPlan === 'free') return 'Upgrade';
-    if (plan === 'teams' && currentPlan === 'pro') return 'Upgrade';
-    return 'Switch';
-  };
 
-  const isCurrentPlan = (plan: SubscriptionPlan) => plan === currentPlan;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer padded backgroundColor={colors.background}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -121,6 +184,15 @@ export default function SubscriptionScreen() {
                 </Text>
               </View>
             </View>
+            {/* Usage Stats (New) */}
+            <View style={styles.usageStats}>
+              <View style={styles.usageRow}>
+                <Text style={[styles.usageLabel, { color: colors.textSecondary }]}>Trips Used</Text>
+                <Text style={[styles.usageValue, { color: colors.text }]}>{usage.trips} / {currentPlanInfo?.limits?.maxTrips === Infinity ? '∞' : currentPlanInfo?.limits?.maxTrips}</Text>
+              </View>
+              {/* Add progress bar here if desired */}
+            </View>
+
             {subscription.cancelAtPeriodEnd ? (
               <TouchableOpacity
                 style={[styles.reactivateButton, { backgroundColor: Colors.primary }]}
@@ -163,8 +235,9 @@ export default function SubscriptionScreen() {
           <PlanCard
             key={plan.id}
             plan={plan}
-            price={getPrice(plan)}
-            savings={billingCycle === 'yearly' ? getSavings(plan) : null}
+            billingCycle={billingCycle}
+            priceComponent={<PlanPriceDisplay plan={plan} billingCycle={billingCycle} />}
+            savingsComponent={billingCycle === 'yearly' ? <SavingsDisplay plan={plan} /> : null}
             isCurrentPlan={isCurrentPlan(plan.id)}
             buttonText={getButtonText(plan.id)}
             onSelect={() => handleSelectPlan(plan.id)}
@@ -201,7 +274,7 @@ export default function SubscriptionScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -211,8 +284,9 @@ export default function SubscriptionScreen() {
 
 interface PlanCardProps {
   plan: PlanInfo;
-  price: string;
-  savings: string | null;
+  billingCycle: BillingCycle;
+  priceComponent: React.ReactNode;
+  savingsComponent: React.ReactNode;
   isCurrentPlan: boolean;
   buttonText: string;
   onSelect: () => void;
@@ -222,8 +296,9 @@ interface PlanCardProps {
 
 function PlanCard({
   plan,
-  price,
-  savings,
+  billingCycle,
+  priceComponent,
+  savingsComponent,
   isCurrentPlan,
   buttonText,
   onSelect,
@@ -266,10 +341,8 @@ function PlanCard({
 
       {/* Price */}
       <View style={styles.priceContainer}>
-        <Text style={[styles.price, { color: colors.text }]}>{price}</Text>
-        {savings && (
-          <Text style={[styles.savings, { color: Colors.success }]}>{savings}</Text>
-        )}
+        {priceComponent}
+        {savingsComponent}
       </View>
 
       {/* Features */}
@@ -348,8 +421,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.screenPadding,
-    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
+    // paddingHorizontal handled by ScreenContainer
+    // paddingVertical handled by ScreenContainer top logic + marginBottom here
   },
   backButton: {
     width: 44,
@@ -368,8 +442,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing['2xl'],
+    // paddingHorizontal handled by ScreenContainer
   },
   // Status Card
   statusCard: {
@@ -435,7 +509,7 @@ const styles = StyleSheet.create({
   },
   savingsBadge: {
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.small,
     marginLeft: Spacing.xs,
   },
@@ -456,8 +530,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 12,
     right: -30,
-    paddingHorizontal: 40,
-    paddingVertical: 4,
+    paddingHorizontal: Spacing['2xl'],
+    paddingVertical: Spacing.xs,
     transform: [{ rotate: '45deg' }],
   },
   planBadgeText: {
@@ -472,7 +546,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   planName: {
     fontSize: FontSizes.heading3,
@@ -553,5 +627,24 @@ const styles = StyleSheet.create({
   restoreButtonText: {
     fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
+  },
+  usageStats: {
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  usageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  usageLabel: {
+    fontSize: FontSizes.caption,
+  },
+  usageValue: {
+    fontSize: FontSizes.caption,
+    fontWeight: FontWeights.semibold,
   },
 });

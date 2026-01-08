@@ -1,13 +1,13 @@
 import { Colors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import React, { ReactNode } from 'react';
-import { StyleSheet, View, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { Edge, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ScreenContainerProps {
   children: ReactNode;
   /** Additional styles for the container */
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   /** Whether to add horizontal padding (default: true) */
   padded?: boolean;
   /** Safe area edges to respect (default: ['top', 'bottom']) */
@@ -20,6 +20,8 @@ interface ScreenContainerProps {
   hasBottomNav?: boolean;
   /** Custom bottom padding to avoid overlap with UI elements */
   bottomPadding?: number;
+  /** Whether to include standard top padding (default: true). Set false for full-screen maps. */
+  withTopPadding?: boolean;
 }
 
 /**
@@ -36,11 +38,11 @@ export function ScreenContainer({
   flex = true,
   hasBottomNav = false,
   bottomPadding,
+  withTopPadding = true,
 }: ScreenContainerProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const insets = useSafeAreaInsets();
 
   const bgColor = backgroundColor ?? colors.background;
   
@@ -48,9 +50,10 @@ export function ScreenContainer({
   // This prevents content from being hidden behind the tab bar
   const additionalBottomPadding = bottomPadding ?? (hasBottomNav ? 80 : 0);
 
-  // Compute top padding as safe-area inset + documents page reference spacing
-  // Use My Trips reference spacing for top padding (safe-area inset + reference spacing)
-  const computedTopPadding = insets.top + Spacing.md;
+  // Compute top padding:
+  // SafeAreaView handles the actual safe area inset via 'edges=['top']'.
+  // We just add standard app spacing.
+  const computedTopPadding = withTopPadding ? Spacing.md : 0;
 
   return (
     <SafeAreaView
