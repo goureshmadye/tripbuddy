@@ -17,23 +17,22 @@ import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -288,19 +287,6 @@ export default function DocumentsScreen() {
     setPreviewImageError(false);
   };
 
-  const handleOpenExternal = async (doc: DocumentWithName) => {
-    try {
-      if (Platform.OS === 'web') {
-        window.open(doc.fileUrl, '_blank');
-      } else {
-        await Linking.openURL(doc.fileUrl);
-      }
-    } catch (err) {
-      console.error('Open error:', err);
-      Alert.alert('Error', 'Failed to open document externally.');
-    }
-  };
-
   const handleShareDocument = async (doc: DocumentWithName) => {
     try {
       if (Platform.OS === 'web') {
@@ -492,7 +478,7 @@ export default function DocumentsScreen() {
   }
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background}>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
       {/* Document Preview Modal */}
       <Modal
         visible={previewDoc !== null}
@@ -757,7 +743,6 @@ export default function DocumentsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 0,
   },
   uploadOverlay: {
     ...StyleSheet.absoluteFillObject,

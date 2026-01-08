@@ -14,6 +14,13 @@ export interface User {
   onboardingComplete?: boolean;
   walkthroughComplete?: boolean;
   createdAt: Date;
+  // Subscription & Usage
+  subscriptionTier: 'free' | 'pro' | 'unlimited';
+  usageCounts?: {
+    trips: number;
+    invitations: number;
+    storageBytes: number;
+  };
 }
 
 export interface Trip {

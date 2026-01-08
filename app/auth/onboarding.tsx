@@ -1,3 +1,4 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
@@ -13,7 +14,6 @@ import {
     Image,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -194,7 +194,7 @@ export default function OnboardingScreen() {
       // Save minimal data and mark onboarding complete
       await completeOnboarding();
       router.replace('/(tabs)');
-    } catch (error) {
+    } catch {
       // Still navigate even if marking complete fails
       router.replace('/(tabs)');
     }
@@ -375,7 +375,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer style={[styles.container, { backgroundColor: colors.background }]} padded>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -421,7 +421,7 @@ export default function OnboardingScreen() {
           />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -436,7 +436,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.sm,
   },
   headerPlaceholder: {
@@ -465,7 +464,6 @@ const styles = StyleSheet.create({
   },
   stepContent: {
     flex: 1,
-    paddingHorizontal: Spacing.screenPadding,
     alignItems: 'center',
   },
   iconContainer: {
@@ -558,9 +556,7 @@ const styles = StyleSheet.create({
   optionSubtitle: {
     fontSize: FontSizes.bodySmall,
   },
-  bottomButtons: {
-    padding: Spacing.screenPadding,
-  },
+  bottomButtons: {},
   nameHint: {
     fontSize: FontSizes.caption,
     marginTop: Spacing.sm,

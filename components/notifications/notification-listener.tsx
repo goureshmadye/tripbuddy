@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef } from 'react';
  * This should be placed at the root of the app (e.g., in _layout.tsx).
  */
 export function NotificationListener() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const router = useRouter();
   
@@ -63,7 +63,7 @@ export function NotificationListener() {
   }, [router]);
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!isAuthenticated || !user?.id) {
       seenNotificationIds.current.clear();
       isInitialLoad.current = true;
       return;
@@ -112,7 +112,7 @@ export function NotificationListener() {
     return () => {
       unsubscribe();
     };
-  }, [user?.id, showToast, handleNotificationNavigation]);
+  }, [isAuthenticated, user?.id, showToast, handleNotificationNavigation]);
 
   // This component doesn't render anything
   return null;

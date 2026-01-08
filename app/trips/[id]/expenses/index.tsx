@@ -252,7 +252,7 @@ export default function ExpensesScreen() {
   };
 
   return (
-    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }}>
+    <ScreenContainer style={{ ...styles.container, backgroundColor: colors.background }} padded={false}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerPlaceholder} />

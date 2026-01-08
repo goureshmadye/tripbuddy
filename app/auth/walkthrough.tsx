@@ -1,3 +1,4 @@
+import { ScreenContainer, useScreenPadding } from '@/components/screen-container';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -16,7 +17,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
@@ -75,8 +75,9 @@ export default function WalkthroughScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { top: topInset, bottom: bottomInset } = useScreenPadding();
   const { completeWalkthrough } = useAuth();
-
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -99,7 +100,12 @@ export default function WalkthroughScreen() {
 
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
+      const nextIndex = currentIndex + 1;
+      flatListRef.current?.scrollToIndex({ 
+        index: nextIndex, 
+        animated: true,
+        viewPosition: 0 
+      });
     } else {
       handleComplete();
     }
@@ -110,8 +116,11 @@ export default function WalkthroughScreen() {
   };
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setCurrentIndex(viewableItems[0].index || 0);
+    if (viewableItems && viewableItems.length > 0) {
+      const newIndex = viewableItems[0].index ?? 0;
+      if (newIndex !== currentIndex) {
+        setCurrentIndex(newIndex);
+      }
     }
   }).current;
 
@@ -169,9 +178,13 @@ export default function WalkthroughScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenContainer 
+      withTopPadding={false}
+      edges={['left', 'right', 'bottom']}
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       {/* Header - overlays the image */}
-      <SafeAreaView style={styles.headerSafeArea}>
+      <View style={[styles.headerSafeArea, { paddingTop: topInset }]}>
         <View style={styles.header}>
           <View style={styles.placeholder} />
           <TouchableOpacity 
@@ -181,7 +194,7 @@ export default function WalkthroughScreen() {
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Slides */}
       <FlatList
@@ -191,8 +204,16 @@ export default function WalkthroughScreen() {
         keyExtractor={(item) => item.id}
         horizontal
         pagingEnabled
+        snapToInterval={width}
+        snapToAlignment="start"
+        decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         bounces={false}
+        getItemLayout={(data, index) => ({
+          length: width,
+          offset: width * index,
+          index,
+        })}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: false }
@@ -207,7 +228,7 @@ export default function WalkthroughScreen() {
       {renderPagination()}
 
       {/* Bottom Button */}
-      <SafeAreaView edges={['bottom']} style={styles.bottomSafeArea}>
+      <View style={[styles.bottomSafeArea, { paddingBottom: Math.max(bottomInset, Spacing.md) }]}>
         <View style={styles.bottomContainer}>
           <Button
             title={currentIndex === slides.length - 1 ? "Get Started" : "Next"}
@@ -222,8 +243,8 @@ export default function WalkthroughScreen() {
             iconPosition="right"
           />
         </View>
-      </SafeAreaView>
-    </View>
+      </View>
+    </ScreenContainer>
   );
 }
 

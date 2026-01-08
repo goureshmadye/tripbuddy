@@ -35,13 +35,18 @@ const timestampToDate = (timestamp: Timestamp | null): Date | null => {
 // Hook: useTrips - Fetch all user's trips
 // ============================================
 export function useTrips() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Load cached trips on mount
+  // Load cached trips on mount (only for authenticated users)
   useEffect(() => {
+    if (!isAuthenticated) {
+      setTrips([]);
+      return;
+    }
+
     const loadCachedTrips = async () => {
       try {
         const cached = await getCachedTrips();
@@ -53,10 +58,10 @@ export function useTrips() {
       }
     };
     loadCachedTrips();
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!user) {
+    if (!isAuthenticated || !user) {
       setTrips([]);
       setLoading(false);
       return;
@@ -171,7 +176,7 @@ export function useTrips() {
       unsubscribeCreated();
       unsubscribeCollabs();
     };
-  }, [user]);
+  }, [isAuthenticated, user]);
 
   const refresh = useCallback(() => {
     // The real-time listeners will automatically refresh
@@ -185,12 +190,13 @@ export function useTrips() {
 // Hook: useTrip - Fetch single trip with details
 // ============================================
 export function useTrip(tripId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [trip, setTrip] = useState<TripWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!tripId) {
+    if (!isAuthenticated || !tripId) {
       setTrip(null);
       setLoading(false);
       return;
@@ -258,7 +264,7 @@ export function useTrip(tripId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [tripId]);
+  }, [isAuthenticated, tripId]);
 
   return { trip, loading, error };
 }
@@ -267,12 +273,13 @@ export function useTrip(tripId: string | undefined) {
 // Hook: useTripItinerary - Real-time itinerary items
 // ============================================
 export function useTripItinerary(tripId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [items, setItems] = useState<ItineraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!tripId) {
+    if (!isAuthenticated || !tripId) {
       setItems([]);
       setLoading(false);
       return;
@@ -318,7 +325,7 @@ export function useTripItinerary(tripId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [tripId]);
+  }, [isAuthenticated, tripId]);
 
   return { items, loading, error };
 }
@@ -327,12 +334,13 @@ export function useTripItinerary(tripId: string | undefined) {
 // Hook: useTripExpenses - Real-time expenses
 // ============================================
 export function useTripExpenses(tripId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!tripId) {
+    if (!isAuthenticated || !tripId) {
       setExpenses([]);
       setLoading(false);
       return;
@@ -374,7 +382,7 @@ export function useTripExpenses(tripId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [tripId]);
+  }, [isAuthenticated, tripId]);
 
   // Calculate total expenses
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
@@ -386,12 +394,13 @@ export function useTripExpenses(tripId: string | undefined) {
 // Hook: useTripCollaborators - Real-time collaborators
 // ============================================
 export function useTripCollaborators(tripId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [collaborators, setCollaborators] = useState<(TripCollaborator & { user?: User })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!tripId) {
+    if (!isAuthenticated || !tripId) {
       setCollaborators([]);
       setLoading(false);
       return;
@@ -451,7 +460,7 @@ export function useTripCollaborators(tripId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [tripId]);
+  }, [isAuthenticated, tripId]);
 
   return { collaborators, loading, error };
 }
@@ -460,12 +469,13 @@ export function useTripCollaborators(tripId: string | undefined) {
 // Hook: useTripDocuments - Real-time documents
 // ============================================
 export function useTripDocuments(tripId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [documents, setDocuments] = useState<TripDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!tripId) {
+    if (!isAuthenticated || !tripId) {
       setDocuments([]);
       setLoading(false);
       return;
@@ -506,7 +516,7 @@ export function useTripDocuments(tripId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [tripId]);
+  }, [isAuthenticated, tripId]);
 
   return { documents, loading, error };
 }
@@ -515,12 +525,13 @@ export function useTripDocuments(tripId: string | undefined) {
 // Hook: useItineraryItem - Single itinerary item
 // ============================================
 export function useItineraryItem(itemId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [item, setItem] = useState<ItineraryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!itemId) {
+    if (!isAuthenticated || !itemId) {
       setItem(null);
       setLoading(false);
       return;
@@ -565,7 +576,7 @@ export function useItineraryItem(itemId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [itemId]);
+  }, [isAuthenticated, itemId]);
 
   return { item, loading, error };
 }
@@ -574,12 +585,13 @@ export function useItineraryItem(itemId: string | undefined) {
 // Hook: useExpenseShares - Get shares for an expense
 // ============================================
 export function useExpenseShares(expenseId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [shares, setShares] = useState<(ExpenseShare & { user?: User })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!expenseId) {
+    if (!isAuthenticated || !expenseId) {
       setShares([]);
       setLoading(false);
       return;
@@ -639,7 +651,7 @@ export function useExpenseShares(expenseId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [expenseId]);
+  }, [isAuthenticated, expenseId]);
 
   return { shares, loading, error };
 }
@@ -648,12 +660,13 @@ export function useExpenseShares(expenseId: string | undefined) {
 // Hook: useTripInvitations - Real-time invitations
 // ============================================
 export function useTripInvitations(tripId: string | undefined) {
+  const { isAuthenticated } = useAuth();
   const [invitations, setInvitations] = useState<(TripInvitation & { inviterName?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!tripId) {
+    if (!isAuthenticated || !tripId) {
       setInvitations([]);
       setLoading(false);
       return;
@@ -713,7 +726,7 @@ export function useTripInvitations(tripId: string | undefined) {
     );
 
     return () => unsubscribe();
-  }, [tripId]);
+  }, [isAuthenticated, tripId]);
 
   // Filter by status
   const pendingInvitations = invitations.filter(inv => inv.status === 'pending');
@@ -726,13 +739,13 @@ export function useTripInvitations(tripId: string | undefined) {
 // Hook: useUserInvitations - Invitations for current user
 // ============================================
 export function useUserInvitations() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [invitations, setInvitations] = useState<(TripInvitation & { tripTitle?: string; inviterName?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!user?.email) {
+    if (!isAuthenticated || !user?.email) {
       setInvitations([]);
       setLoading(false);
       return;
@@ -804,7 +817,7 @@ export function useUserInvitations() {
     );
 
     return () => unsubscribe();
-  }, [user?.email]);
+  }, [isAuthenticated, user?.email]);
 
   return { invitations, loading, error };
 }

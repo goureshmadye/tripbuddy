@@ -1,4 +1,4 @@
-import { useScreenPadding } from '@/components/screen-container';
+import { ScreenContainer } from '@/components/screen-container';
 import { LimitWarning, UpgradePrompt } from '@/components/subscription';
 import { Button } from '@/components/ui/button';
 import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
@@ -56,7 +56,7 @@ export default function AddExpenseScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const { topMargin, bottom } = useScreenPadding();
+
 
   // Auth and collaborators
   const { user } = useAuth();
@@ -188,7 +188,7 @@ export default function AddExpenseScreen() {
     : '0.00';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       
       {/* Upgrade Prompt Modal */}
@@ -207,7 +207,7 @@ export default function AddExpenseScreen() {
         style={styles.keyboardView}
       >
         {/* Header with centralized top padding */}
-        <View style={[styles.header, { paddingTop: topMargin }]}>
+        <View style={styles.header}>
           <TouchableOpacity 
             onPress={() => router.back()}
             style={styles.backButton}
@@ -444,7 +444,7 @@ export default function AddExpenseScreen() {
         </ScrollView>
 
         {/* Bottom Button */}
-        <View style={[styles.bottomContainer, { backgroundColor: colors.background, paddingBottom: bottom + Spacing.md }]}>
+        <View style={[styles.bottomContainer, { backgroundColor: colors.background }]}>
           <Button
             title="Save Expense"
             onPress={handleSave}
@@ -455,7 +455,7 @@ export default function AddExpenseScreen() {
           />
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </ScreenContainer>
   );
 }
 

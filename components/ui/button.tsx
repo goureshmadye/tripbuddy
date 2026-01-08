@@ -26,6 +26,8 @@ interface ButtonProps {
   fullWidth?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
 export function Button({
@@ -40,6 +42,8 @@ export function Button({
   fullWidth = false,
   style,
   textStyle,
+  accessibilityLabel,
+  accessibilityHint,
 }: ButtonProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -120,6 +124,11 @@ export function Button({
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}
+      accessible={true}
+      accessibilityLabel={accessibilityLabel || title}
+      accessibilityHint={accessibilityHint}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       style={[
         styles.container,
         sizeStyles.container,
@@ -159,7 +168,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    fontWeight: FontWeights.semibold,
+    fontWeight: FontWeights.medium,
   },
   iconLeft: {
     marginRight: Spacing.sm,

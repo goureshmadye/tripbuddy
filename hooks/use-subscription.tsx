@@ -1,30 +1,30 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import {
-    cancelSubscription,
-    checkCollaboratorLimit,
-    checkDocumentLimit,
-    checkExpenseLimit,
-    checkFeatureAccess,
-    checkTeamMemberLimit,
-    createOrUpdateSubscription,
-    getEffectivePlan,
-    getPlanInfo,
-    getPlanLimits,
-    getTripUsage,
-    reactivateSubscription,
-    subscribeToSubscription,
+  cancelSubscription,
+  checkCollaboratorLimit,
+  checkDocumentLimit,
+  checkExpenseLimit,
+  checkFeatureAccess,
+  checkTeamMemberLimit,
+  createOrUpdateSubscription,
+  getEffectivePlan,
+  getPlanInfo,
+  getPlanLimits,
+  getTripUsage,
+  reactivateSubscription,
+  subscribeToSubscription,
 } from '../services/subscription';
 import {
-    BillingCycle,
-    FeatureAccess,
-    GatedFeature,
-    PlanInfo,
-    PlanLimits,
-    PLANS,
-    SubscriptionPlan,
-    TripUsage,
-    UserSubscription,
+  BillingCycle,
+  FeatureAccess,
+  GatedFeature,
+  PlanInfo,
+  PlanLimits,
+  PLANS,
+  SubscriptionPlan,
+  TripUsage,
+  UserSubscription,
 } from '../types/subscription';
 import { useAuth } from './use-auth';
 
@@ -72,7 +72,7 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 // ============================================
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tripUsageCache, setTripUsageCache] = useState<Record<string, TripUsage>>({});
@@ -94,7 +94,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   // Subscribe to subscription changes
   useEffect(() => {
-    if (!user?.id) {
+    if (!isAuthenticated || !user?.id) {
       setSubscription(null);
       setIsLoading(false);
       return;
@@ -107,7 +107,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     });
 
     return () => unsubscribe();
-  }, [user?.id]);
+  }, [user?.id, isAuthenticated]);
 
   // Feature access checks
   const checkFeature = useCallback(
@@ -307,15 +307,19 @@ export function useTripUsage(tripId: string): {
   expenseAccess: FeatureAccess;
   documentAccess: FeatureAccess;
 } {
+  const { isAuthenticated } = useAuth();
   const { tripUsageCache, getTripUsageCounts, checkCollaborators, checkExpenses, checkDocuments } = useSubscription();
   const [isLoading, setIsLoading] = useState(!tripUsageCache[tripId]);
 
   useEffect(() => {
-    if (!tripUsageCache[tripId]) {
-      setIsLoading(true);
-      getTripUsageCounts(tripId).finally(() => setIsLoading(false));
+    if (!isAuthenticated || !tripUsageCache[tripId]) {
+      setIsLoading(false);
+      return;
     }
-  }, [tripId, getTripUsageCounts, tripUsageCache]);
+
+    setIsLoading(true);
+    getTripUsageCounts(tripId).finally(() => setIsLoading(false));
+  }, [tripId, getTripUsageCounts, tripUsageCache, isAuthenticated]);
 
   const usage = tripUsageCache[tripId] || null;
 
@@ -323,6 +327,7 @@ export function useTripUsage(tripId: string): {
     usage,
     isLoading,
     refresh: async () => {
+      if (!isAuthenticated) return;
       setIsLoading(true);
       await getTripUsageCounts(tripId);
       setIsLoading(false);

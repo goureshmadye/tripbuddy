@@ -26,7 +26,7 @@ interface UseNotificationsResult {
 }
 
 export function useNotifications(): UseNotificationsResult {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,7 @@ export function useNotifications(): UseNotificationsResult {
 
   // Subscribe to real-time notifications
   useEffect(() => {
-    if (!user?.id) {
+    if (!isAuthenticated || !user?.id) {
       setNotifications([]);
       setUnreadCount(0);
       setLoading(false);
@@ -73,11 +73,11 @@ export function useNotifications(): UseNotificationsResult {
       unsubscribeNotifications();
       unsubscribeCount();
     };
-  }, [user?.id]);
+  }, [isAuthenticated, user?.id]);
 
   // Manual refresh
   const refresh = useCallback(async () => {
-    if (!user?.id) return;
+    if (!isAuthenticated || !user?.id) return;
     
     setRefreshing(true);
     try {
@@ -172,11 +172,11 @@ export function useNotifications(): UseNotificationsResult {
 
 // Hook to get just the unread count (lighter weight)
 export function useUnreadNotificationCount(): number {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!isAuthenticated || !user?.id) {
       setCount(0);
       return;
     }
@@ -189,7 +189,7 @@ export function useUnreadNotificationCount(): number {
     );
 
     return () => unsubscribe();
-  }, [user?.id]);
+  }, [isAuthenticated, user?.id]);
 
   return count;
 }

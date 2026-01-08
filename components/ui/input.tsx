@@ -20,6 +20,8 @@ interface InputProps extends TextInputProps {
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
   containerStyle?: ViewStyle;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
 export function Input({
@@ -30,6 +32,8 @@ export function Input({
   rightIcon,
   onRightIconPress,
   containerStyle,
+  accessibilityLabel,
+  accessibilityHint,
   secureTextEntry,
   ...props
 }: InputProps) {
@@ -73,6 +77,9 @@ export function Input({
         
         <TextInput
           {...props}
+          accessible={true}
+          accessibilityLabel={accessibilityLabel || label || props.placeholder}
+          accessibilityHint={accessibilityHint || hint}
           style={[
             styles.input,
             { color: colors.text },
@@ -133,7 +140,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.medium,
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.labelGap, // 8px
   },
   inputContainer: {
     flexDirection: 'row',

@@ -1,7 +1,8 @@
+import { ScreenContainer } from '@/components/screen-container';
 import { TripCard } from '@/components/trips/trip-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton';
-import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
+import { BorderRadius, Colors, FontSizes, FontWeights, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTrips } from '@/hooks/use-trips';
@@ -20,7 +21,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Bottom navigation height for proper content padding
 const BOTTOM_NAV_HEIGHT = 80;
@@ -32,7 +33,7 @@ export default function MyTripsScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
 
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { trips, loading, error, refresh } = useTrips();
   
   const [refreshing, setRefreshing] = useState(false);
@@ -72,6 +73,10 @@ export default function MyTripsScreen() {
   };
 
   const handleCreateTrip = () => {
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
     router.push('/trips/create');
   };
 
@@ -83,7 +88,7 @@ export default function MyTripsScreen() {
       return;
     }
 
-    if (!user?.id) {
+    if (!isAuthenticated || !user?.id) {
       Alert.alert('Error', 'You must be logged in to join a trip');
       setJoiningTrip(false);
       return;
@@ -128,6 +133,7 @@ export default function MyTripsScreen() {
         { text: 'OK', onPress: () => {
           setJoinModalVisible(false);
           setTripCode('');
+          router.push(`/trips/${invitation.tripId}`);
         }}]
       );
     } catch (err: any) {
@@ -140,7 +146,7 @@ export default function MyTripsScreen() {
   // Show loading state with skeleton
   if (loading && trips.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenContainer style={styles.container} edges={['top']} bottomPadding={0}>
         {/* Header skeleton */}
         <View style={styles.header}>
           <View>
@@ -175,14 +181,14 @@ export default function MyTripsScreen() {
           <SkeletonCard style={{ marginBottom: Spacing.md }} />
           <SkeletonCard />
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   // Show error state
   if (error) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenContainer style={styles.container} edges={['top']} bottomPadding={0}>
         <EmptyState
           icon="alert-circle-outline"
           title="Something went wrong"
@@ -190,20 +196,20 @@ export default function MyTripsScreen() {
           actionLabel="Retry"
           onAction={onRefresh}
         />
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <ScreenContainer style={styles.container} edges={['top']} bottomPadding={0}>
       {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-            Welcome back,
+            {isAuthenticated ? 'Welcome back,' : 'Welcome,'}
           </Text>
           <Text style={[styles.userName, { color: colors.text }]}>
-            {user?.name || 'Traveler'}! 👋
+            {isAuthenticated ? (user?.name || 'Traveler') : 'Guest'}! 👋
           </Text>
         </View>
       </View>
@@ -282,13 +288,23 @@ export default function MyTripsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {filteredTrips.length === 0 ? (
-          <EmptyState
-            icon="airplane-outline"
-            title="No trips yet"
-            description="Start planning your next adventure! Create a trip and invite your friends to collaborate."
-            actionLabel="Create Trip"
-            onAction={handleCreateTrip}
-          />
+          isAuthenticated ? (
+            <EmptyState
+              icon="airplane-outline"
+              title="Ready to plan your first adventure?"
+              description="Create your first trip and start collaborating with friends. Add destinations, itineraries, and share expenses effortlessly."
+              actionLabel="Create Trip"
+              onAction={handleCreateTrip}
+            />
+          ) : (
+            <EmptyState
+              icon="log-in-outline"
+              title="Sign in to access your trips"
+              description="Create an account to plan trips, collaborate with friends, and manage your travel adventures."
+              actionLabel="Sign In"
+              onAction={() => router.push('/auth/login')}
+            />
+          )
         ) : (
           <>
             <View style={styles.sectionHeader}>
@@ -358,7 +374,17 @@ export default function MyTripsScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={handleCreateTrip}
+        activeOpacity={0.8}
+        accessibilityLabel="Create new trip"
+        accessibilityHint="Opens trip creation wizard"
+      >
+        <Ionicons name="add" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+    </ScreenContainer>
   );
 }
 
@@ -371,8 +397,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingTop: 0, // Removed top padding as ScreenContainer handles it
+    paddingBottom: Spacing.md, // Increased to 16px
   },
   greeting: {
     fontSize: FontSizes.bodySmall,
@@ -508,5 +534,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: FontSizes.body,
     fontWeight: FontWeights.semibold,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+    right: Spacing.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.lg,
   },
 });

@@ -119,7 +119,7 @@ export default function AddItineraryItemScreen() {
   };
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
