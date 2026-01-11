@@ -27,7 +27,7 @@ TripBuddy is a collaborative, mobile-first travel planning app. It centralizes i
 ## 🛠️ Tech Stack
 
 - **Frontend:** React Native (Expo, TypeScript)
-- **Backend:** Node.js/Express.js (planned/optional), Prisma ORM, PostgreSQL
+- **Backend:** Node.js/Express.js.
 - **Auth & Storage:** Firebase (Auth, Firestore, Storage, Messaging)
 - **Maps:** Google Maps SDK & Places API
 - **AI:** Gemini/OpenAI API
@@ -60,9 +60,7 @@ npm install
 2. **Start the app:**
 
 ```sh
-npm start
-# or
-expo start
+npx expo start --clear
 ```
 
 3. **Platform-specific:**
