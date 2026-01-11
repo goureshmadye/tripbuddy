@@ -104,7 +104,7 @@ describe('useAuth Hook', () => {
     
     // Mock auth state change with authenticated user
     const mockUser = { uid: 'test-user-id', email: 'test@example.com' };
-    mockOnAuthStateChanged.mockImplementation((auth, callback) => {
+    mockOnAuthStateChanged.mockImplementation((auth: any, callback: any) => {
       callback(mockUser); // Call the callback with the user
       return jest.fn(); // Return unsubscribe function
     });

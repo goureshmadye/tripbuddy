@@ -25,7 +25,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }) => children,
+  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
   useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 })),
 }));
 
@@ -163,7 +163,7 @@ describe('MyTripsScreen', () => {
     const { toJSON } = render(<MyTripsScreen />);
     expect(toJSON()).toMatchSnapshot();
   });
-});
+
   beforeEach(() => {
     jest.clearAllMocks();
   });

@@ -148,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   onboardingComplete: data.onboardingComplete || false,
                   walkthroughComplete: data.walkthroughComplete || false,
                   createdAt: data.createdAt?.toDate() || new Date(),
+                  subscriptionTier: data.subscriptionTier || 'free',
                 };
                 setUser(userData);
                 setIsOnboardingComplete(data.onboardingComplete || false);
@@ -165,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   onboardingComplete: false,
                   walkthroughComplete: false,
                   createdAt: new Date(),
+                  subscriptionTier: 'free',
                 };
 
                 await setDoc(userDocRef, {
@@ -278,6 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             onboardingComplete: data.onboardingComplete || false,
             walkthroughComplete: data.walkthroughComplete || false,
             createdAt: data.createdAt?.toDate() || new Date(),
+            subscriptionTier: data.subscriptionTier || 'free',
           });
         } else {
           resolve(null);

@@ -1,6 +1,5 @@
 import { useTrips } from '@/hooks/use-trips';
-import { renderHook } from '@testing-library/react-native';
-import { act } from 'react-test-renderer';
+import { act, renderHook } from '@testing-library/react-native';
 
 // Mock dependencies
 jest.mock('@/services/offline', () => ({
@@ -93,13 +92,13 @@ describe('useTrips Hook', () => {
     mockOnSnapshot.mockReturnValue(jest.fn());
 
     await act(async () => {
-      rerender();
+      rerender({});
     });
 
     // Should now attempt to load data (though mocked)
     expect(mockGetCachedTrips).toHaveBeenCalled();
     await act(async () => {
-      rerender();
+      rerender({});
     });
 
     // Should now attempt to load data (though mocked)

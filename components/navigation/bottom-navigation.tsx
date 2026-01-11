@@ -75,6 +75,7 @@ export function BottomNavigation({
                 ? 'rgba(15, 23, 42, 0.75)' 
                 : 'rgba(255, 255, 255, 0.75)',
               backdropFilter: 'blur(24px)',
+              // @ts-ignore
               WebkitBackdropFilter: 'blur(24px)',
             },
           ]}

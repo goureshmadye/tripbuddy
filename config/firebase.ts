@@ -3,9 +3,10 @@ import { initializeApp } from "firebase/app";
 import {
     browserLocalPersistence,
     getAuth,
-    getReactNativePersistence,
     initializeAuth,
 } from "firebase/auth";
+// @ts-ignore
+import { getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { Platform } from "react-native";
