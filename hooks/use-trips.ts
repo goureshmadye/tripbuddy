@@ -247,6 +247,7 @@ export function useTrip(tripId: string | undefined) {
               profilePhoto: creatorData.profilePhoto,
               defaultCurrency: creatorData.defaultCurrency,
               createdAt: creatorData.createdAt?.toDate() || new Date(),
+              subscriptionTier: creatorData.subscriptionTier || 'free',
             };
           }
         } catch (err) {
@@ -439,6 +440,7 @@ export function useTripCollaborators(tripId: string | undefined) {
                   profilePhoto: userData.profilePhoto,
                   defaultCurrency: userData.defaultCurrency,
                   createdAt: userData.createdAt?.toDate() || new Date(),
+                  subscriptionTier: userData.subscriptionTier || 'free',
                 };
               }
             } catch (err) {
@@ -630,6 +632,7 @@ export function useExpenseShares(expenseId: string | undefined) {
                   profilePhoto: userData.profilePhoto,
                   defaultCurrency: userData.defaultCurrency,
                   createdAt: userData.createdAt?.toDate() || new Date(),
+                  subscriptionTier: userData.subscriptionTier || 'free',
                 };
               }
             } catch (err) {

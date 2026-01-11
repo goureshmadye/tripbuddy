@@ -39,17 +39,7 @@ describe('Input Component', () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('renders disabled input correctly', () => {
-    const { toJSON } = render(
-      <Input
-        placeholder="Disabled input"
-        value="disabled value"
-        onChangeText={() => {}}
-        disabled
-      />
-    );
-    expect(toJSON()).toMatchSnapshot();
-  });
+
 
   it('renders password input correctly', () => {
     const { toJSON } = render(

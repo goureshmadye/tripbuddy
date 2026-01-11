@@ -5,45 +5,35 @@ import React from 'react';
 describe('Button Component', () => {
   it('renders primary button correctly', () => {
     const { toJSON } = render(
-      <Button onPress={() => {}}>
-        Primary Button
-      </Button>
+      <Button onPress={() => {}} title="Primary Button" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it('renders secondary button correctly', () => {
     const { toJSON } = render(
-      <Button variant="secondary" onPress={() => {}}>
-        Secondary Button
-      </Button>
+      <Button variant="secondary" onPress={() => {}} title="Secondary Button" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it('renders disabled button correctly', () => {
     const { toJSON } = render(
-      <Button disabled onPress={() => {}}>
-        Disabled Button
-      </Button>
+      <Button disabled onPress={() => {}} title="Disabled Button" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it('renders loading button correctly', () => {
     const { toJSON } = render(
-      <Button loading onPress={() => {}}>
-        Loading Button
-      </Button>
+      <Button loading onPress={() => {}} title="Loading Button" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it('renders button with icon correctly', () => {
     const { toJSON } = render(
-      <Button icon="add" onPress={() => {}}>
-        Button with Icon
-      </Button>
+      <Button icon="add" onPress={() => {}} title="Button with Icon" />
     );
     expect(toJSON()).toMatchSnapshot();
   });

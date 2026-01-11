@@ -1,5 +1,13 @@
 import { Config } from '@/constants/config';
-import RazorpayCheckout from 'react-native-razorpay';
+import { Alert } from 'react-native';
+
+// Safely import Razorpay - module may not exist in Expo Go
+let RazorpayCheckout: any = null;
+try {
+  RazorpayCheckout = require('react-native-razorpay').default;
+} catch (e) {
+  console.warn('[Payment] Razorpay native module not available');
+}
 
 export interface PaymentOptions {
   description: string;
@@ -33,6 +41,20 @@ export const PaymentService = {
    * Opens the Razorpay checkout modal
    */
   startPayment: async (options: PaymentOptions): Promise<PaymentSuccessResponse> => {
+    // Check if Razorpay is available (not in Expo Go)
+    if (!RazorpayCheckout) {
+      return new Promise((resolve, reject) => {
+        Alert.alert(
+          'Payment Not Available',
+          'Native payment module is not available in Expo Go. Use a Development Build to test payments.',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => reject({ code: 0, description: 'Payment not supported in Expo Go' }) },
+            { text: 'Simulate Success', onPress: () => resolve({ razorpay_payment_id: 'mock_pay_123' }) }
+          ]
+        );
+      });
+    }
+
     const checkoutOptions = {
       key: Config.RAZORPAY_KEY_ID,
       amount: options.amount, 
@@ -42,7 +64,6 @@ export const PaymentService = {
       image: options.image || 'https://i.imgur.com/3g7nmJC.png', // Fallback logo
       prefill: options.prefill,
       theme: options.theme || { color: '#F37254' },
-      // order_id: 'order_DslnoIgkIDL8Zt' // Generate this from backend in production
     };
 
     try {
