@@ -95,7 +95,7 @@ TripBuddy is a mobile-first application designed to streamline travel planning. 
 
 ## 3\. System Architecture
 
-### 3.2. External Integrations
+### 3.1. External Integrations
 
 | Service                      | Purpose                                                  |
 | ---------------------------- | -------------------------------------------------------- |
@@ -105,8 +105,7 @@ TripBuddy is a mobile-first application designed to streamline travel planning. 
 | Firebase Cloud Messaging     | Real-time push notifications.                            |
 | Nylas / MailboxLayer         | Email parsing for auto-importing bookings.               |
 
-##
-##4\. Development Roadmap
+## 4\. Development Roadmap
 
 ### Phase 1: Foundation (Weeks 1-4)
 
