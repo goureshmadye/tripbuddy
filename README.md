@@ -60,7 +60,7 @@ Below are screenshots of the main app screens (Version 01):
 
 TripBuddy is a mobile-first application designed to streamline travel planning. It solves the fragmentation problem of using spreadsheets, group chats, and disparate booking apps. By centralizing itineraries, expenses, documents, and real-time collaboration, TripBuddy acts as a single source of truth for solo travelers and groups.
 
-**2\. Functional Specifications (MVP)**
+## **2\. Functional Specifications (MVP)**
 
 ### 2.1. Authentication & Onboarding
 
