@@ -14,8 +14,9 @@ export interface User {
   onboardingComplete?: boolean;
   walkthroughComplete?: boolean;
   createdAt: Date;
+  upiId?: string | null;
   // Subscription & Usage
-  subscriptionTier: 'free' | 'pro' | 'unlimited';
+  subscriptionTier: "free" | "pro" | "unlimited";
   usageCounts?: {
     trips: number;
     invitations: number;
@@ -38,11 +39,12 @@ export interface Trip {
   tripType?: string | null;
   budgetRange?: string | null;
   travelerCount?: string | null;
+  tripDuration?: string | null;
   accommodationType?: string | null;
   createdAt: Date;
 }
 
-export type CollaboratorRole = 'viewer' | 'editor' | 'owner';
+export type CollaboratorRole = "viewer" | "editor" | "owner";
 
 export interface TripCollaborator {
   id: string;
@@ -51,7 +53,7 @@ export interface TripCollaborator {
   role: CollaboratorRole;
 }
 
-export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+export type InvitationStatus = "pending" | "accepted" | "declined" | "expired";
 
 export interface TripInvitation {
   id: string;
@@ -71,7 +73,13 @@ export interface TripInvitation {
 // 4.2 Itinerary & Logistics
 // ============================================
 
-export type ItineraryCategory = 'activity' | 'food' | 'transport' | 'accommodation' | 'sightseeing' | 'other';
+export type ItineraryCategory =
+  | "activity"
+  | "food"
+  | "transport"
+  | "accommodation"
+  | "sightseeing"
+  | "other";
 
 export interface ItineraryItem {
   id: string;
@@ -108,7 +116,13 @@ export interface Expense {
   amount: number;
   currency: string;
   paidBy: string;
-  category?: 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
+  category?:
+    | "food"
+    | "transport"
+    | "accommodation"
+    | "activities"
+    | "shopping"
+    | "other";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -120,11 +134,12 @@ export interface ExpenseShare {
   shareAmount: number;
 }
 
-export type DocumentType = 'flight' | 'hotel' | 'activity' | 'other';
+export type DocumentType = "flight" | "hotel" | "activity" | "other";
 
 export interface TripDocument {
   id: string;
   tripId: string;
+  itineraryId?: string | null;
   uploadedBy: string;
   fileUrl: string; // Link to Firebase Storage
   label?: string | null;
@@ -140,19 +155,19 @@ export interface TripDocument {
 // 4.4 Notifications
 // ============================================
 
-export type NotificationType = 
-  | 'collaborator_added'
-  | 'collaborator_removed'
-  | 'collaborator_role_changed'
-  | 'trip_invitation'
-  | 'invitation_accepted'
-  | 'expense_added'
-  | 'expense_updated'
-  | 'itinerary_added'
-  | 'itinerary_updated'
-  | 'trip_updated'
-  | 'system'
-  | 'reminder';
+export type NotificationType =
+  | "collaborator_added"
+  | "collaborator_removed"
+  | "collaborator_role_changed"
+  | "trip_invitation"
+  | "invitation_accepted"
+  | "expense_added"
+  | "expense_updated"
+  | "itinerary_added"
+  | "itinerary_updated"
+  | "trip_updated"
+  | "system"
+  | "reminder";
 
 export interface Notification {
   id: string;
@@ -177,16 +192,16 @@ export interface Notification {
 }
 
 export const COLLECTIONS = {
-  USERS: 'users',
-  TRIPS: 'trips',
-  TRIP_COLLABORATORS: 'tripCollaborators',
-  TRIP_INVITATIONS: 'tripInvitations',
-  ITINERARY_ITEMS: 'itineraryItems',
-  USER_LOCATIONS: 'userLocations',
-  EXPENSES: 'expenses',
-  EXPENSE_SHARES: 'expenseShares',
-  DOCUMENTS: 'documents',
-  NOTIFICATIONS: 'notifications',
+  USERS: "users",
+  TRIPS: "trips",
+  TRIP_COLLABORATORS: "tripCollaborators",
+  TRIP_INVITATIONS: "tripInvitations",
+  ITINERARY_ITEMS: "itineraryItems",
+  USER_LOCATIONS: "userLocations",
+  EXPENSES: "expenses",
+  EXPENSE_SHARES: "expenseShares",
+  DOCUMENTS: "documents",
+  NOTIFICATIONS: "notifications",
 } as const;
 
 // ============================================
@@ -216,24 +231,29 @@ export interface Coordinates {
 
 // Firestore converter helper types
 export type WithId<T> = T & { id: string };
-export type CreateInput<T> = Omit<T, 'id' | 'createdAt'>;
-export type UpdateInput<T> = Partial<Omit<T, 'id' | 'createdAt'>>;
+export type CreateInput<T> = Omit<T, "id" | "createdAt">;
+export type UpdateInput<T> = Partial<Omit<T, "id" | "createdAt">>;
 
 // ============================================
 // Utility Functions
 // ============================================
 
 // Calculate distance between two points using Haversine formula
-export function calculateDistance(point1: Coordinates, point2: Coordinates): number {
+export function calculateDistance(
+  point1: Coordinates,
+  point2: Coordinates,
+): number {
   const R = 6371; // Earth's radius in kilometers
   const dLat = toRadians(point2.latitude - point1.latitude);
   const dLon = toRadians(point2.longitude - point1.longitude);
-  
-  const a = 
+
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(point1.latitude)) * Math.cos(toRadians(point2.latitude)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  
+    Math.cos(toRadians(point1.latitude)) *
+      Math.cos(toRadians(point2.latitude)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c; // Distance in kilometers
 }

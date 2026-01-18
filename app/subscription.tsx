@@ -1,99 +1,142 @@
-import { ScreenContainer } from '@/components/screen-container';
-import { Button } from '@/components/ui/button';
-import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
-import { useAuth } from '@/hooks/use-auth';
-import { useGlobalPricing } from '@/hooks/use-global-pricing';
-import { usePlans, useSubscription } from '@/hooks/use-subscription';
-import { useAppColorScheme } from '@/hooks/use-theme';
-import { useUsageLimits } from '@/hooks/use-usage-limits';
-import { PaymentService } from '@/services/payment';
-import { PricingService } from '@/services/pricing';
-import { BillingCycle, PlanInfo, SubscriptionPlan } from '@/types/subscription';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { ScreenContainer } from "@/components/screen-container";
+import {
+    BorderRadius,
+    Colors,
+    FontSizes,
+    FontWeights,
+    Spacing,
+} from "@/constants/theme";
+import { useAuth } from "@/hooks/use-auth";
+import { useGlobalPricing } from "@/hooks/use-global-pricing";
+import { usePlans, useSubscription } from "@/hooks/use-subscription";
+import { useAppColorScheme } from "@/hooks/use-theme";
+import { useUsageLimits } from "@/hooks/use-usage-limits";
+import { PaymentService } from "@/services/payment";
+import { PricingService } from "@/services/pricing";
+import { BillingCycle, PlanInfo, SubscriptionPlan } from "@/types/subscription";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
     Alert,
     ScrollView,
     StyleSheet,
-    Switch,
     Text,
     TouchableOpacity,
     View,
-} from 'react-native';
+} from "react-native";
 
 export default function SubscriptionScreen() {
   const router = useRouter();
   const colorScheme = useAppColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
 
   const { user } = useAuth();
   const { plans, currentPlan, currentPlanInfo } = usePlans();
-  const { subscription, upgradePlan, cancelPlan, reactivatePlan, daysUntilRenewal } = useSubscription();
+  const {
+    subscription,
+    upgradePlan,
+    cancelPlan,
+    reactivatePlan,
+    daysUntilRenewal,
+  } = useSubscription();
   const { usage } = useUsageLimits();
 
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>('yearly');
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
   const [isProcessing, setIsProcessing] = useState(false);
 
   const getButtonText = (plan: SubscriptionPlan) => {
-    if (plan === currentPlan) return 'Current Plan';
-    if (plan === 'free') return 'Downgrade';
-    if (currentPlan === 'free') return 'Upgrade';
-    if (plan === 'teams' && currentPlan === 'pro') return 'Upgrade';
-    return 'Switch';
+    if (plan === currentPlan) return "Current Plan";
+    if (plan === "free") return "Downgrade";
+    if (currentPlan === "free") return "Start Free Trial";
+    if (plan === "teams" && currentPlan === "pro") return "Upgrade";
+    return "Switch";
   };
 
   const isCurrentPlan = (plan: SubscriptionPlan) => plan === currentPlan;
 
   // Helper component to handle price conversion per plan
-  const PlanPriceDisplay = ({ plan, billingCycle }: { plan: PlanInfo, billingCycle: BillingCycle }) => {
+  const PlanPriceDisplay = ({
+    plan,
+    billingCycle,
+  }: {
+    plan: PlanInfo;
+    billingCycle: BillingCycle;
+  }) => {
     // Only convert if not free
-    const basePrice = plan.pricing ? (billingCycle === 'yearly' ? plan.pricing.yearly : plan.pricing.monthly) : 0;
-    
+    const basePrice = plan.pricing
+      ? billingCycle === "yearly"
+        ? plan.pricing.yearly
+        : plan.pricing.monthly
+      : 0;
+
     // Use the hook - ensure we check for free plan
     const { displayAmount } = useGlobalPricing(basePrice);
-    
-    if (!plan.pricing) return <Text style={[styles.price, { color: colors.text }]}>Free</Text>;
-    
-    const period = billingCycle === 'yearly' ? '/year' : '/month';
-    return <Text style={[styles.price, { color: colors.text }]}>{displayAmount}{period}</Text>;
+
+    if (!plan.pricing)
+      return <Text style={[styles.price, { color: colors.text }]}>Free</Text>;
+
+    const period = billingCycle === "yearly" ? "/year" : "/month";
+    return (
+      <View style={styles.priceRow}>
+        <Text style={[styles.price, { color: colors.text }]}>
+          {displayAmount}
+        </Text>
+        <Text style={[styles.pricePeriod, { color: colors.textSecondary }]}>
+          {period}
+        </Text>
+      </View>
+    );
   };
 
-  // Helper for savings display
-  const SavingsDisplay = ({ plan }: { plan: PlanInfo }) => {
-    // consistently call hook
-    const monthlyTotal = plan.pricing ? plan.pricing.monthly * 12 : 0;
-    const yearlyTotal = plan.pricing ? plan.pricing.yearly : 0;
-    const savingsBase = Math.max(0, monthlyTotal - yearlyTotal);
-    
-    const { displayAmount } = useGlobalPricing(savingsBase);
-    
-    if (!plan.pricing || savingsBase <= 0) return null;
-    
-    return <Text style={[styles.savings, { color: Colors.success }]}>Save {displayAmount}/year</Text>;
+  // Helper for per-day pricing
+  const PerDayPricing = ({
+    plan,
+    billingCycle,
+  }: {
+    plan: PlanInfo;
+    billingCycle: BillingCycle;
+  }) => {
+    const basePrice = plan.pricing
+      ? billingCycle === "yearly"
+        ? plan.pricing.yearly / 12
+        : plan.pricing.monthly
+      : 0;
+
+    const perDay = basePrice / 30;
+    const { displayAmount } = useGlobalPricing(perDay);
+
+    if (!plan.pricing) return null;
+
+    return (
+      <Text style={[styles.perDayText, { color: colors.textMuted }]}>
+        Only {displayAmount}/day
+      </Text>
+    );
   };
 
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
     if (plan === currentPlan) return;
 
-    if (plan === 'free') {
+    if (plan === "free") {
       // Downgrade confirmation
       Alert.alert(
-        'Downgrade to Free',
-        'You will lose access to premium features. Your current subscription will remain active until the end of the billing period. Are you sure?',
+        "Downgrade to Free",
+        "You will lose access to premium features. Your current subscription will remain active until the end of the billing period. Are you sure?",
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: "Cancel", style: "cancel" },
           {
-            text: 'Downgrade',
-            style: 'destructive',
+            text: "Downgrade",
+            style: "destructive",
             onPress: async () => {
               setIsProcessing(true);
-              await upgradePlan('free', billingCycle);
+              await upgradePlan("free", billingCycle);
               setIsProcessing(false);
             },
           },
-        ]
+        ],
       );
       return;
     }
@@ -102,63 +145,67 @@ export default function SubscriptionScreen() {
     setIsProcessing(true);
 
     try {
-
-
       // 1. Get Plan Details & Dynamic Price
-      const targetPlan = plans.find(p => p.id === plan);
+      const targetPlan = plans.find((p) => p.id === plan);
       if (!targetPlan || !targetPlan.pricing) {
         throw new Error("Invalid plan selected");
       }
-      
-      const basePrice = billingCycle === 'yearly' ? targetPlan.pricing.yearly : targetPlan.pricing.monthly;
-      const userCurrency = user?.defaultCurrency || 'USD';
-      
+
+      const basePrice =
+        billingCycle === "yearly"
+          ? targetPlan.pricing.yearly
+          : targetPlan.pricing.monthly;
+      const userCurrency = user?.defaultCurrency || "USD";
+
       // Calculate local price (returns amount in subunits, e.g. paise)
-      const localPrice = PricingService.calculateLocalPrice(basePrice * 100, userCurrency);
+      const localPrice = PricingService.calculateLocalPrice(
+        basePrice * 100,
+        userCurrency,
+      );
 
       // 2. Open Razorpay Checkout
       await PaymentService.startPayment({
         description: `${targetPlan.name} (${billingCycle})`,
-        image: 'https://cdn-icons-png.flaticon.com/512/3177/3177440.png', // TripBuddy icon placeholder
+        image: "https://cdn-icons-png.flaticon.com/512/3177/3177440.png", // TripBuddy icon placeholder
         currency: localPrice.currency,
         amount: localPrice.amount, // already in subunits
-        name: 'TripBuddy',
+        name: "TripBuddy",
         prefill: {
-          email: user?.email || 'user@example.com',
-          contact: '', // can pull from profile if available
-          name: user?.name || 'Traveler',
+          email: user?.email || "user@example.com",
+          contact: "", // can pull from profile if available
+          name: user?.name || "Traveler",
         },
-        theme: { color: Colors.primary }
+        theme: { color: Colors.primary },
       });
 
       // 3. Success -> Update Subscription
       await upgradePlan(plan, billingCycle);
-      Alert.alert('Success', `Welcome to ${targetPlan.name}!`);
-      
+      Alert.alert("Success", `Welcome to ${targetPlan.name}!`);
     } catch (error: any) {
-       // Handle Cancellation or Failure
-       if (error.code && error.description) {
-         Alert.alert('Payment Failed', error.description);
-       } else {
-         console.error(error);
-         Alert.alert('Error', 'Something went wrong during checkout.');
-       }
+      // Handle Cancellation or Failure
+      if (error.code && error.description) {
+        Alert.alert("Payment Failed", error.description);
+      } else {
+        console.error(error);
+        Alert.alert("Error", "Something went wrong during checkout.");
+      }
     } finally {
       setIsProcessing(false);
     }
   };
 
-
+  const savingsPercentage = 35; // Calculate based on plans if needed
 
   return (
     <ScreenContainer padded backgroundColor={colors.background}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons name="close" size={28} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Subscription</Text>
-        <View style={styles.headerPlaceholder} />
       </View>
 
       <ScrollView
@@ -166,90 +213,263 @@ export default function SubscriptionScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Current Plan Status */}
-        {subscription && currentPlan !== 'free' && (
-          <View style={[styles.statusCard, { backgroundColor: Colors.primary + '10', borderColor: Colors.primary + '30' }]}>
-            <View style={styles.statusContent}>
-              <View style={[styles.statusIcon, { backgroundColor: Colors.primary + '20' }]}>
-                <Ionicons name="diamond" size={24} color={Colors.primary} />
-              </View>
-              <View style={styles.statusText}>
-                <Text style={[styles.statusTitle, { color: colors.text }]}>
-                  {currentPlanInfo?.name}
-                </Text>
-                <Text style={[styles.statusSubtitle, { color: colors.textSecondary }]}>
-                  {subscription.cancelAtPeriodEnd
-                    ? `Cancels in ${daysUntilRenewal} days`
-                    : `Renews in ${daysUntilRenewal} days`}
-                </Text>
-              </View>
-            </View>
-            {/* Usage Stats (New) */}
-            <View style={styles.usageStats}>
-              <View style={styles.usageRow}>
-                <Text style={[styles.usageLabel, { color: colors.textSecondary }]}>Trips Used</Text>
-                <Text style={[styles.usageValue, { color: colors.text }]}>{usage.trips} / {currentPlanInfo?.limits?.maxTrips === Infinity ? '∞' : currentPlanInfo?.limits?.maxTrips}</Text>
-              </View>
-              {/* Add progress bar here if desired */}
-            </View>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>
+            Unlock Your Perfect Trip
+          </Text>
+          <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+            Choose the plan that fits your travel style
+          </Text>
+        </View>
 
-            {subscription.cancelAtPeriodEnd ? (
-              <TouchableOpacity
-                style={[styles.reactivateButton, { backgroundColor: Colors.primary }]}
-                onPress={reactivatePlan}
-              >
-                <Text style={styles.reactivateButtonText}>Reactivate</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.cancelButton, { borderColor: Colors.error }]}
-                onPress={cancelPlan}
-              >
-                <Text style={[styles.cancelButtonText, { color: Colors.error }]}>Cancel</Text>
-              </TouchableOpacity>
-            )}
+        {/* Billing Toggle */}
+        <View style={styles.billingToggleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.billingOption,
+              billingCycle === "monthly" && {
+                backgroundColor: isDark
+                  ? colors.backgroundTertiary
+                  : colors.backgroundSecondary,
+              },
+            ]}
+            onPress={() => setBillingCycle("monthly")}
+          >
+            <Text
+              style={[
+                styles.billingOptionText,
+                {
+                  color:
+                    billingCycle === "monthly" ? colors.text : colors.textMuted,
+                  fontWeight:
+                    billingCycle === "monthly"
+                      ? FontWeights.semibold
+                      : FontWeights.regular,
+                },
+              ]}
+            >
+              Monthly
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.billingOption,
+              billingCycle === "yearly" && {
+                backgroundColor: isDark
+                  ? colors.backgroundTertiary
+                  : colors.backgroundSecondary,
+              },
+            ]}
+            onPress={() => setBillingCycle("yearly")}
+          >
+            <Text
+              style={[
+                styles.billingOptionText,
+                {
+                  color:
+                    billingCycle === "yearly" ? colors.text : colors.textMuted,
+                  fontWeight:
+                    billingCycle === "yearly"
+                      ? FontWeights.semibold
+                      : FontWeights.regular,
+                },
+              ]}
+            >
+              Yearly
+            </Text>
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountBadgeText}>
+                {savingsPercentage}% OFF
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Current Plan Status Badge (if applicable) */}
+        {subscription && currentPlan !== "free" && (
+          <View
+            style={[
+              styles.currentPlanBanner,
+              {
+                backgroundColor: Colors.primary + "15",
+                borderColor: Colors.primary + "30",
+              },
+            ]}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={20}
+              color={Colors.primary}
+            />
+            <Text style={[styles.currentPlanText, { color: colors.text }]}>
+              You're on {currentPlanInfo?.name}
+            </Text>
+            <Text
+              style={[
+                styles.currentPlanSubtext,
+                { color: colors.textSecondary },
+              ]}
+            >
+              {subscription.cancelAtPeriodEnd
+                ? `Cancels in ${daysUntilRenewal} days`
+                : `Renews in ${daysUntilRenewal} days`}
+            </Text>
           </View>
         )}
 
-        {/* Billing Toggle */}
-        <View style={styles.billingToggle}>
-          <Text style={[styles.billingLabel, { color: billingCycle === 'monthly' ? colors.text : colors.textMuted }]}>
-            Monthly
-          </Text>
-          <Switch
-            value={billingCycle === 'yearly'}
-            onValueChange={(value) => setBillingCycle(value ? 'yearly' : 'monthly')}
-            trackColor={{ false: colors.border, true: Colors.primary + '40' }}
-            thumbColor={billingCycle === 'yearly' ? Colors.primary : colors.textMuted}
-          />
-          <Text style={[styles.billingLabel, { color: billingCycle === 'yearly' ? colors.text : colors.textMuted }]}>
-            Yearly
-          </Text>
-          <View style={[styles.savingsBadge, { backgroundColor: Colors.success + '15' }]}>
-            <Text style={[styles.savingsBadgeText, { color: Colors.success }]}>Save up to 35%</Text>
-          </View>
-        </View>
-
         {/* Plans */}
-        {plans.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            billingCycle={billingCycle}
-            priceComponent={<PlanPriceDisplay plan={plan} billingCycle={billingCycle} />}
-            savingsComponent={billingCycle === 'yearly' ? <SavingsDisplay plan={plan} /> : null}
-            isCurrentPlan={isCurrentPlan(plan.id)}
-            buttonText={getButtonText(plan.id)}
-            onSelect={() => handleSelectPlan(plan.id)}
-            isProcessing={isProcessing}
-            colors={colors}
-          />
-        ))}
+        {plans.map((plan) => {
+          const isPro = plan.id === "pro";
+          const isTeams = plan.id === "teams";
+          const accentColor = isTeams ? "#F97316" : Colors.primary;
+          const isCurrent = isCurrentPlan(plan.id);
+
+          return (
+            <View
+              key={plan.id}
+              style={[
+                styles.planCard,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: isCurrent ? accentColor : colors.border,
+                  borderWidth: isCurrent ? 2 : 1,
+                },
+              ]}
+            >
+              {/* Gradient border effect for popular plans */}
+              {plan.popular && !isCurrent && (
+                <LinearGradient
+                  colors={[accentColor + "40", accentColor + "10"]}
+                  style={styles.gradientBorder}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+              )}
+
+              {/* Badge */}
+              {plan.badge && (
+                <View
+                  style={[styles.planBadge, { backgroundColor: accentColor }]}
+                >
+                  <Text style={styles.planBadgeText}>{plan.badge}</Text>
+                </View>
+              )}
+
+              {/* Card Content */}
+              <View style={styles.planContent}>
+                {/* Header */}
+                <View style={styles.planHeaderSection}>
+                  <View style={styles.planTitleRow}>
+                    <Text style={[styles.planName, { color: colors.text }]}>
+                      {plan.name}
+                    </Text>
+                    {isCurrent && (
+                      <View
+                        style={[
+                          styles.currentBadge,
+                          { backgroundColor: accentColor + "20" },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.currentBadgeText,
+                            { color: accentColor },
+                          ]}
+                        >
+                          Current
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.planDescription,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {plan.description}
+                  </Text>
+                </View>
+
+                {/* Pricing Section */}
+                <View style={styles.pricingSection}>
+                  <PlanPriceDisplay plan={plan} billingCycle={billingCycle} />
+                  <PerDayPricing plan={plan} billingCycle={billingCycle} />
+                </View>
+
+                {/* Features List */}
+                <View style={styles.featuresList}>
+                  {plan.features.slice(0, 7).map((feature, index) => (
+                    <View key={index} style={styles.featureItem}>
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={accentColor}
+                        style={styles.featureIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.featureText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {feature}
+                      </Text>
+                    </View>
+                  ))}
+                  {plan.features.length > 7 && (
+                    <Text style={[styles.moreFeatures, { color: accentColor }]}>
+                      +{plan.features.length - 7} more features
+                    </Text>
+                  )}
+                </View>
+
+                {/* CTA Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.ctaButton,
+                    {
+                      backgroundColor: isCurrent ? "transparent" : accentColor,
+                      borderWidth: isCurrent ? 1 : 0,
+                      borderColor: isCurrent ? colors.border : "transparent",
+                    },
+                  ]}
+                  onPress={() => handleSelectPlan(plan.id)}
+                  disabled={isCurrent || isProcessing}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.ctaButtonText,
+                      { color: isCurrent ? colors.textMuted : "#FFFFFF" },
+                    ]}
+                  >
+                    {getButtonText(plan.id)}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Free trial note */}
+                {!isCurrent && plan.id !== "free" && currentPlan === "free" && (
+                  <Text style={[styles.trialNote, { color: colors.textMuted }]}>
+                    14 days free, then{" "}
+                    {billingCycle === "yearly"
+                      ? "billed annually"
+                      : "billed monthly"}
+                  </Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
 
         {/* FAQ Section */}
         <View style={styles.faqSection}>
-          <Text style={[styles.faqTitle, { color: colors.text }]}>Frequently Asked Questions</Text>
-          
+          <Text style={[styles.faqTitle, { color: colors.text }]}>
+            Frequently Asked Questions
+          </Text>
+
           <FAQItem
             question="Can I cancel anytime?"
             answer="Yes, you can cancel your subscription at any time. You'll continue to have access until the end of your billing period."
@@ -261,8 +481,8 @@ export default function SubscriptionScreen() {
             colors={colors}
           />
           <FAQItem
-            question="Is there a free trial?"
-            answer="We offer a 14-day free trial for TripBuddy Pro. You won't be charged until the trial ends."
+            question="How does the 14-day trial work?"
+            answer="Start using TripBuddy Pro features immediately. You won't be charged until after 14 days. Cancel anytime during the trial period at no cost."
             colors={colors}
           />
         </View>
@@ -275,107 +495,6 @@ export default function SubscriptionScreen() {
         </TouchableOpacity>
       </ScrollView>
     </ScreenContainer>
-  );
-}
-
-// ============================================
-// Plan Card Component
-// ============================================
-
-interface PlanCardProps {
-  plan: PlanInfo;
-  billingCycle: BillingCycle;
-  priceComponent: React.ReactNode;
-  savingsComponent: React.ReactNode;
-  isCurrentPlan: boolean;
-  buttonText: string;
-  onSelect: () => void;
-  isProcessing: boolean;
-  colors: typeof Colors.light;
-}
-
-function PlanCard({
-  plan,
-  billingCycle,
-  priceComponent,
-  savingsComponent,
-  isCurrentPlan,
-  buttonText,
-  onSelect,
-  isProcessing,
-  colors,
-}: PlanCardProps) {
-  const isPro = plan.id === 'pro';
-  const isTeams = plan.id === 'teams';
-  const accentColor = isTeams ? '#8B5CF6' : Colors.primary;
-
-  return (
-    <View
-      style={[
-        styles.planCard,
-        { backgroundColor: colors.card, borderColor: isCurrentPlan ? accentColor : colors.border },
-        plan.popular && { borderColor: accentColor, borderWidth: 2 },
-      ]}
-    >
-      {/* Badge */}
-      {plan.badge && (
-        <View style={[styles.planBadge, { backgroundColor: accentColor }]}>
-          <Text style={styles.planBadgeText}>{plan.badge}</Text>
-        </View>
-      )}
-
-      {/* Header */}
-      <View style={styles.planHeader}>
-        <View style={styles.planTitleRow}>
-          <Text style={[styles.planName, { color: colors.text }]}>{plan.name}</Text>
-          {(isPro || isTeams) && (
-            <View style={[styles.planIcon, { backgroundColor: accentColor + '15' }]}>
-              <Ionicons name="diamond" size={16} color={accentColor} />
-            </View>
-          )}
-        </View>
-        <Text style={[styles.planDescription, { color: colors.textSecondary }]}>
-          {plan.description}
-        </Text>
-      </View>
-
-      {/* Price */}
-      <View style={styles.priceContainer}>
-        {priceComponent}
-        {savingsComponent}
-      </View>
-
-      {/* Features */}
-      <View style={styles.featuresContainer}>
-        {plan.features.slice(0, 6).map((feature, index) => (
-          <View key={index} style={styles.featureRow}>
-            <Ionicons
-              name={feature.includes('Everything') ? 'checkmark-done-circle' : 'checkmark-circle'}
-              size={18}
-              color={feature.includes('Everything') ? accentColor : Colors.success}
-            />
-            <Text style={[styles.featureText, { color: colors.textSecondary }]}>
-              {feature}
-            </Text>
-          </View>
-        ))}
-        {plan.features.length > 6 && (
-          <Text style={[styles.moreFeatures, { color: accentColor }]}>
-            +{plan.features.length - 6} more features
-          </Text>
-        )}
-      </View>
-
-      {/* Button */}
-      <Button
-        title={buttonText}
-        onPress={onSelect}
-        disabled={isCurrentPlan || isProcessing}
-        variant={isCurrentPlan ? 'outline' : 'primary'}
-        fullWidth
-        style={!isCurrentPlan ? { backgroundColor: accentColor } : undefined}
-      />
-    </View>
   );
 }
 
@@ -399,188 +518,214 @@ function FAQItem({ question, answer, colors }: FAQItemProps) {
       activeOpacity={0.7}
     >
       <View style={styles.faqQuestion}>
-        <Text style={[styles.faqQuestionText, { color: colors.text }]}>{question}</Text>
+        <Text style={[styles.faqQuestionText, { color: colors.text }]}>
+          {question}
+        </Text>
         <Ionicons
-          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+          name={isExpanded ? "chevron-up" : "chevron-down"}
           size={20}
           color={colors.textMuted}
         />
       </View>
       {isExpanded && (
-        <Text style={[styles.faqAnswer, { color: colors.textSecondary }]}>{answer}</Text>
+        <Text style={[styles.faqAnswer, { color: colors.textSecondary }]}>
+          {answer}
+        </Text>
       )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    // paddingHorizontal handled by ScreenContainer
-    // paddingVertical handled by ScreenContainer top logic + marginBottom here
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
   },
   backButton: {
     width: 44,
     height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: FontSizes.heading3,
-    fontWeight: FontWeights.semibold,
-  },
-  headerPlaceholder: {
-    width: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Spacing['2xl'],
-    // paddingHorizontal handled by ScreenContainer
+    paddingBottom: Spacing["2xl"],
   },
-  // Status Card
-  statusCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.large,
-    borderWidth: 1,
-    marginBottom: Spacing.lg,
+
+  // Hero Section
+  heroSection: {
+    alignItems: "center",
+    marginBottom: Spacing.xl,
   },
-  statusContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: FontWeights.bold,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+    lineHeight: 38,
   },
-  statusIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statusText: {},
-  statusTitle: {
+  heroSubtitle: {
     fontSize: FontSizes.body,
-    fontWeight: FontWeights.semibold,
+    textAlign: "center",
+    lineHeight: 22,
   },
-  statusSubtitle: {
-    fontSize: FontSizes.caption,
-  },
-  reactivateButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.medium,
-  },
-  reactivateButtonText: {
-    color: '#fff',
-    fontSize: FontSizes.bodySmall,
-    fontWeight: FontWeights.semibold,
-  },
-  cancelButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.medium,
-    borderWidth: 1,
-  },
-  cancelButtonText: {
-    fontSize: FontSizes.bodySmall,
-    fontWeight: FontWeights.semibold,
-  },
+
   // Billing Toggle
-  billingToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
+  billingToggleContainer: {
+    flexDirection: "row",
+    backgroundColor: "transparent",
+    borderRadius: BorderRadius.medium,
+    padding: 4,
     marginBottom: Spacing.lg,
+    gap: Spacing.sm,
   },
-  billingLabel: {
-    fontSize: FontSizes.body,
-    fontWeight: FontWeights.medium,
-  },
-  savingsBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+  billingOption: {
+    flex: 1,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.small,
-    marginLeft: Spacing.xs,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
-  savingsBadgeText: {
-    fontSize: FontSizes.caption,
-    fontWeight: FontWeights.semibold,
+  billingOptionText: {
+    fontSize: FontSizes.body,
   },
-  // Plan Card
-  planCard: {
-    padding: Spacing.cardPadding,
-    borderRadius: BorderRadius.large,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-    position: 'relative',
-    overflow: 'hidden',
+  discountBadge: {
+    position: "absolute",
+    top: -8,
+    right: -4,
+    backgroundColor: Colors.warning,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.small,
   },
-  planBadge: {
-    position: 'absolute',
-    top: 12,
-    right: -30,
-    paddingHorizontal: Spacing['2xl'],
-    paddingVertical: Spacing.xs,
-    transform: [{ rotate: '45deg' }],
-  },
-  planBadgeText: {
-    color: '#fff',
-    fontSize: FontSizes.caption,
+  discountBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
     fontWeight: FontWeights.bold,
   },
-  planHeader: {
+
+  // Current Plan Banner
+  currentPlanBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  currentPlanText: {
+    fontSize: FontSizes.bodySmall,
+    fontWeight: FontWeights.semibold,
+    flex: 1,
+  },
+  currentPlanSubtext: {
+    fontSize: FontSizes.caption,
+  },
+
+  // Plan Card
+  planCard: {
+    borderRadius: BorderRadius.large,
+    marginBottom: Spacing.lg,
+    overflow: "hidden",
+    position: "relative",
+  },
+  gradientBorder: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: BorderRadius.large,
+  },
+  planBadge: {
+    position: "absolute",
+    top: 16,
+    right: -28,
+    paddingHorizontal: 32,
+    paddingVertical: 6,
+    transform: [{ rotate: "45deg" }],
+    zIndex: 10,
+  },
+  planBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: FontWeights.bold,
+    textAlign: "center",
+  },
+  planContent: {
+    padding: Spacing.cardPadding + 4,
+  },
+
+  // Plan Header
+  planHeaderSection: {
     marginBottom: Spacing.md,
   },
   planTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: Spacing.xs,
+    gap: Spacing.sm,
   },
   planName: {
     fontSize: FontSizes.heading3,
     fontWeight: FontWeights.bold,
   },
-  planIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+  currentBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.small,
+  },
+  currentBadgeText: {
+    fontSize: FontSizes.caption,
+    fontWeight: FontWeights.semibold,
   },
   planDescription: {
     fontSize: FontSizes.bodySmall,
+    lineHeight: 20,
   },
-  priceContainer: {
-    marginBottom: Spacing.md,
+
+  // Pricing Section
+  pricingSection: {
+    marginBottom: Spacing.lg,
+  },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginBottom: Spacing.xs,
   },
   price: {
-    fontSize: FontSizes.heading1,
+    fontSize: 42,
     fontWeight: FontWeights.bold,
+    letterSpacing: -1,
   },
-  savings: {
-    fontSize: FontSizes.bodySmall,
+  pricePeriod: {
+    fontSize: FontSizes.body,
+    marginLeft: Spacing.xs,
     fontWeight: FontWeights.medium,
   },
-  featuresContainer: {
-    marginBottom: Spacing.md,
+  perDayText: {
+    fontSize: FontSizes.bodySmall,
   },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
+
+  // Features List
+  featuresList: {
+    marginBottom: Spacing.lg,
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: Spacing.sm,
+  },
+  featureIcon: {
+    marginRight: Spacing.sm,
+    marginTop: 2,
   },
   featureText: {
     flex: 1,
@@ -592,9 +737,28 @@ const styles = StyleSheet.create({
     fontWeight: FontWeights.medium,
     marginTop: Spacing.xs,
   },
+
+  // CTA Button
+  ctaButton: {
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctaButtonText: {
+    fontSize: FontSizes.body,
+    fontWeight: FontWeights.semibold,
+  },
+  trialNote: {
+    fontSize: FontSizes.caption,
+    textAlign: "center",
+    marginTop: Spacing.sm,
+  },
+
   // FAQ
   faqSection: {
-    marginTop: Spacing.lg,
+    marginTop: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   faqTitle: {
     fontSize: FontSizes.heading3,
@@ -606,9 +770,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   faqQuestion: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   faqQuestionText: {
     flex: 1,
@@ -620,31 +784,14 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     lineHeight: 20,
   },
+
+  // Restore Button
   restoreButton: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: Spacing.lg,
   },
   restoreButtonText: {
     fontSize: FontSizes.body,
     fontWeight: FontWeights.medium,
-  },
-  usageStats: {
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-  },
-  usageRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.xs,
-  },
-  usageLabel: {
-    fontSize: FontSizes.caption,
-  },
-  usageValue: {
-    fontSize: FontSizes.caption,
-    fontWeight: FontWeights.semibold,
   },
 });

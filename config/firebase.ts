@@ -1,10 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { initializeApp } from "firebase/app";
+import { getApp, getApps, initializeApp } from "firebase/app";
 import {
+    Auth,
     browserLocalPersistence,
     getAuth,
     initializeAuth,
 } from "firebase/auth";
+
 // @ts-ignore
 import { getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -22,21 +24,32 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase - check if already initialized
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firebase Auth with persistence based on platform
-export const auth =
-  Platform.OS === "web"
-    ? getAuth(app)
-    : initializeAuth(app, {
-        persistence: getReactNativePersistence(AsyncStorage),
-      });
-
-// For web, set persistence
+let auth: Auth;
 if (Platform.OS === "web") {
+  auth = getAuth(app);
+  // For web, set persistence
   auth.setPersistence(browserLocalPersistence);
+} else {
+  // For React Native, use initializeAuth with try-catch to handle re-initialization
+  try {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  } catch (error: any) {
+    // If already initialized, just get the existing instance
+    if (error.code === "auth/already-initialized") {
+      auth = getAuth(app);
+    } else {
+      throw error;
+    }
+  }
 }
+
+export { auth };
 
 export const storage = getStorage(app);
 export const firestore = getFirestore(app);

@@ -1,32 +1,38 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useState,
+} from "react";
+import { Alert } from "react-native";
 import {
-  cancelSubscription,
-  checkCollaboratorLimit,
-  checkDocumentLimit,
-  checkExpenseLimit,
-  checkFeatureAccess,
-  checkTeamMemberLimit,
-  createOrUpdateSubscription,
-  getEffectivePlan,
-  getPlanInfo,
-  getPlanLimits,
-  getTripUsage,
-  reactivateSubscription,
-  subscribeToSubscription,
-} from '../services/subscription';
+    cancelSubscription,
+    checkCollaboratorLimit,
+    checkDocumentLimit,
+    checkExpenseLimit,
+    checkFeatureAccess,
+    checkTeamMemberLimit,
+    createOrUpdateSubscription,
+    getEffectivePlan,
+    getPlanInfo,
+    getPlanLimits,
+    getTripUsage,
+    reactivateSubscription,
+    subscribeToSubscription,
+} from "../services/subscription";
 import {
-  BillingCycle,
-  FeatureAccess,
-  GatedFeature,
-  PlanInfo,
-  PlanLimits,
-  PLANS,
-  SubscriptionPlan,
-  TripUsage,
-  UserSubscription,
-} from '../types/subscription';
-import { useAuth } from './use-auth';
+    BillingCycle,
+    FeatureAccess,
+    GatedFeature,
+    PlanInfo,
+    PlanLimits,
+    PLANS,
+    SubscriptionPlan,
+    TripUsage,
+    UserSubscription,
+} from "../types/subscription";
+import { useAuth } from "./use-auth";
 
 // ============================================
 // Context Types
@@ -39,43 +45,59 @@ interface SubscriptionContextType {
   planInfo: PlanInfo | undefined;
   limits: PlanLimits;
   isLoading: boolean;
-  
+
   // Feature access
   checkFeature: (feature: GatedFeature) => FeatureAccess;
   checkCollaborators: (tripId: string, currentCount: number) => FeatureAccess;
   checkExpenses: (tripId: string, currentCount: number) => FeatureAccess;
   checkDocuments: (tripId: string, currentCount: number) => FeatureAccess;
   checkTeamMembers: (currentCount: number) => FeatureAccess;
-  
+
   // Trip usage
   getTripUsageCounts: (tripId: string) => Promise<TripUsage>;
   tripUsageCache: Record<string, TripUsage>;
   refreshTripUsage: (tripId: string) => Promise<void>;
-  
+
   // Plan management
-  upgradePlan: (plan: SubscriptionPlan, billingCycle?: BillingCycle) => Promise<void>;
+  upgradePlan: (
+    plan: SubscriptionPlan,
+    billingCycle?: BillingCycle,
+  ) => Promise<void>;
   cancelPlan: () => Promise<void>;
   reactivatePlan: () => Promise<void>;
-  
+
   // UI helpers
-  showUpgradePrompt: (feature: GatedFeature | string, requiredPlan?: SubscriptionPlan) => void;
+  showUpgradePrompt: (
+    feature: GatedFeature | string,
+    requiredPlan?: SubscriptionPlan,
+  ) => void;
   isPro: boolean;
   isTeams: boolean;
   isFree: boolean;
   daysUntilRenewal: number | null;
 }
 
-const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
+const SubscriptionContext = createContext<SubscriptionContextType | undefined>(
+  undefined,
+);
 
 // ============================================
 // Provider Component
 // ============================================
 
-export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
+export function SubscriptionProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { user, isAuthenticated } = useAuth();
-  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+  const [subscription, setSubscription] = useState<UserSubscription | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
-  const [tripUsageCache, setTripUsageCache] = useState<Record<string, TripUsage>>({});
+  const [tripUsageCache, setTripUsageCache] = useState<
+    Record<string, TripUsage>
+  >({});
 
   // Derive plan and limits
   const plan = getEffectivePlan(subscription);
@@ -83,13 +105,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const limits = getPlanLimits(plan);
 
   // Convenience flags
-  const isPro = plan === 'pro' || plan === 'teams';
-  const isTeams = plan === 'teams';
-  const isFree = plan === 'free';
+  const isPro = plan === "pro" || plan === "teams";
+  const isTeams = plan === "teams";
+  const isFree = plan === "free";
 
   // Calculate days until renewal
   const daysUntilRenewal = subscription?.currentPeriodEnd
-    ? Math.ceil((subscription.currentPeriodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    ? Math.ceil(
+        (subscription.currentPeriodEnd.getTime() - Date.now()) /
+          (1000 * 60 * 60 * 24),
+      )
     : null;
 
   // Subscribe to subscription changes
@@ -114,53 +139,62 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     (feature: GatedFeature): FeatureAccess => {
       return checkFeatureAccess(plan, feature);
     },
-    [plan]
+    [plan],
   );
 
   const checkCollaborators = useCallback(
     (_tripId: string, currentCount: number): FeatureAccess => {
       return checkCollaboratorLimit(plan, currentCount);
     },
-    [plan]
+    [plan],
   );
 
   const checkExpenses = useCallback(
     (_tripId: string, currentCount: number): FeatureAccess => {
       return checkExpenseLimit(plan, currentCount);
     },
-    [plan]
+    [plan],
   );
 
   const checkDocuments = useCallback(
     (_tripId: string, currentCount: number): FeatureAccess => {
       return checkDocumentLimit(plan, currentCount);
     },
-    [plan]
+    [plan],
   );
 
   const checkTeamMembers = useCallback(
     (currentCount: number): FeatureAccess => {
       return checkTeamMemberLimit(plan, currentCount);
     },
-    [plan]
+    [plan],
   );
 
   // Trip usage tracking
-  const getTripUsageCounts = useCallback(async (tripId: string): Promise<TripUsage> => {
-    const usage = await getTripUsage(tripId);
-    setTripUsageCache((prev) => ({ ...prev, [tripId]: usage }));
-    return usage;
-  }, []);
+  const getTripUsageCounts = useCallback(
+    async (tripId: string): Promise<TripUsage> => {
+      const usage = await getTripUsage(tripId);
+      setTripUsageCache((prev) => ({ ...prev, [tripId]: usage }));
+      return usage;
+    },
+    [],
+  );
 
-  const refreshTripUsage = useCallback(async (tripId: string): Promise<void> => {
-    await getTripUsageCounts(tripId);
-  }, [getTripUsageCounts]);
+  const refreshTripUsage = useCallback(
+    async (tripId: string): Promise<void> => {
+      await getTripUsageCounts(tripId);
+    },
+    [getTripUsageCounts],
+  );
 
   // Plan management
   const upgradePlan = useCallback(
-    async (newPlan: SubscriptionPlan, billingCycle: BillingCycle = 'monthly') => {
+    async (
+      newPlan: SubscriptionPlan,
+      billingCycle: BillingCycle = "monthly",
+    ) => {
       if (!user?.id) {
-        Alert.alert('Error', 'Please sign in to upgrade your plan');
+        Alert.alert("Error", "Please sign in to upgrade your plan");
         return;
       }
 
@@ -169,41 +203,41 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         // For now, we'll just update the subscription directly
         await createOrUpdateSubscription(user.id, newPlan, billingCycle);
         Alert.alert(
-          'Plan Updated',
-          `You've successfully ${newPlan === 'free' ? 'downgraded to' : 'upgraded to'} ${getPlanInfo(newPlan)?.name}`
+          "Plan Updated",
+          `You've successfully ${newPlan === "free" ? "downgraded to" : "upgraded to"} ${getPlanInfo(newPlan)?.name}`,
         );
       } catch (error) {
-        console.error('Failed to update plan:', error);
-        Alert.alert('Error', 'Failed to update your plan. Please try again.');
+        console.error("Failed to update plan:", error);
+        Alert.alert("Error", "Failed to update your plan. Please try again.");
       }
     },
-    [user?.id]
+    [user?.id],
   );
 
   const cancelPlan = useCallback(async () => {
     if (!user?.id) return;
 
     Alert.alert(
-      'Cancel Subscription',
-      'Your subscription will remain active until the end of the billing period. Are you sure?',
+      "Cancel Subscription",
+      "Your subscription will remain active until the end of the billing period. Are you sure?",
       [
-        { text: 'Keep Subscription', style: 'cancel' },
+        { text: "Keep Subscription", style: "cancel" },
         {
-          text: 'Cancel Subscription',
-          style: 'destructive',
+          text: "Cancel Subscription",
+          style: "destructive",
           onPress: async () => {
             try {
               await cancelSubscription(user.id);
               Alert.alert(
-                'Subscription Canceled',
-                'Your subscription will remain active until the end of your billing period.'
+                "Subscription Canceled",
+                "Your subscription will remain active until the end of your billing period.",
               );
             } catch (error) {
-              Alert.alert('Error', 'Failed to cancel subscription');
+              Alert.alert("Error", "Failed to cancel subscription");
             }
           },
         },
-      ]
+      ],
     );
   }, [user?.id]);
 
@@ -212,33 +246,36 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
     try {
       await reactivateSubscription(user.id);
-      Alert.alert('Subscription Reactivated', 'Your subscription has been reactivated.');
+      Alert.alert(
+        "Subscription Reactivated",
+        "Your subscription has been reactivated.",
+      );
     } catch (error) {
-      Alert.alert('Error', 'Failed to reactivate subscription');
+      Alert.alert("Error", "Failed to reactivate subscription");
     }
   }, [user?.id]);
 
   // UI helper to show upgrade prompts
   const showUpgradePrompt = useCallback(
     (feature: GatedFeature | string, requiredPlan?: SubscriptionPlan) => {
-      const targetPlan = requiredPlan || 'pro';
+      const targetPlan = requiredPlan || "pro";
       const targetPlanInfo = getPlanInfo(targetPlan);
 
       Alert.alert(
-        'Upgrade Required',
-        `${feature} requires ${targetPlanInfo?.name || 'a higher plan'}. Upgrade now to unlock this feature!`,
+        "Upgrade Required",
+        `${feature} requires ${targetPlanInfo?.name || "a higher plan"}. Upgrade now to unlock this feature!`,
         [
-          { text: 'Not Now', style: 'cancel' },
+          { text: "Not Now", style: "cancel" },
           {
-            text: 'View Plans',
+            text: "View Plans",
             onPress: () => {
               // Navigation to subscription screen will be handled by the component
             },
           },
-        ]
+        ],
       );
     },
-    []
+    [],
   );
 
   return (
@@ -279,7 +316,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 export function useSubscription() {
   const context = useContext(SubscriptionContext);
   if (context === undefined) {
-    throw new Error('useSubscription must be used within a SubscriptionProvider');
+    throw new Error(
+      "useSubscription must be used within a SubscriptionProvider",
+    );
   }
   return context;
 }
@@ -291,7 +330,9 @@ export function useSubscription() {
 /**
  * Hook to check if a specific feature is available
  */
-export function useFeatureAccess(feature: GatedFeature): FeatureAccess & { isLoading: boolean } {
+export function useFeatureAccess(
+  feature: GatedFeature,
+): FeatureAccess & { isLoading: boolean } {
   const { checkFeature, isLoading } = useSubscription();
   return { ...checkFeature(feature), isLoading };
 }
@@ -308,7 +349,13 @@ export function useTripUsage(tripId: string): {
   documentAccess: FeatureAccess;
 } {
   const { isAuthenticated } = useAuth();
-  const { tripUsageCache, getTripUsageCounts, checkCollaborators, checkExpenses, checkDocuments } = useSubscription();
+  const {
+    tripUsageCache,
+    getTripUsageCounts,
+    checkCollaborators,
+    checkExpenses,
+    checkDocuments,
+  } = useSubscription();
   const [isLoading, setIsLoading] = useState(!tripUsageCache[tripId]);
 
   useEffect(() => {
@@ -332,7 +379,10 @@ export function useTripUsage(tripId: string): {
       await getTripUsageCounts(tripId);
       setIsLoading(false);
     },
-    collaboratorAccess: checkCollaborators(tripId, usage?.collaboratorCount || 0),
+    collaboratorAccess: checkCollaborators(
+      tripId,
+      usage?.collaboratorCount || 0,
+    ),
     expenseAccess: checkExpenses(tripId, usage?.expenseCount || 0),
     documentAccess: checkDocuments(tripId, usage?.documentCount || 0),
   };

@@ -1,15 +1,21 @@
-import { ScreenHeader } from '@/components/navigation/screen-header';
-import { ScreenContainer } from '@/components/screen-container';
-import { EmptyState } from '@/components/ui/empty-state';
-import { BorderRadius, Colors, FontSizes, FontWeights, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useItineraryItem } from '@/hooks/use-trips';
-import { deleteItineraryItem, updateItineraryItem } from '@/services/firestore';
-import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
-import * as Linking from 'expo-linking';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { ScreenHeader } from "@/components/navigation/screen-header";
+import { ScreenContainer } from "@/components/screen-container";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+    BorderRadius,
+    Colors,
+    FontSizes,
+    FontWeights,
+    Spacing,
+} from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useItineraryItem } from "@/hooks/use-trips";
+import { deleteItineraryItem, updateItineraryItem } from "@/services/firestore";
+import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import * as Linking from "expo-linking";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -24,7 +30,7 @@ import {
     TouchableOpacity,
     TouchableWithoutFeedback,
     View,
-} from 'react-native';
+} from "react-native";
 
 interface Attachment {
   id: string;
@@ -42,63 +48,84 @@ interface Comment {
   createdAt: Date;
 }
 
-const CATEGORY_CONFIG: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
-  activity: { icon: 'flash-outline', color: '#8B5CF6', label: 'Activity' },
-  food: { icon: 'restaurant-outline', color: '#F97316', label: 'Food & Dining' },
-  transport: { icon: 'car-outline', color: Colors.primary, label: 'Transport' },
-  accommodation: { icon: 'bed-outline', color: Colors.secondary, label: 'Accommodation' },
-  sightseeing: { icon: 'camera-outline', color: Colors.accent, label: 'Sightseeing' },
-  other: { icon: 'ellipsis-horizontal-outline', color: '#64748B', label: 'Other' },
+const CATEGORY_CONFIG: Record<
+  string,
+  { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }
+> = {
+  activity: { icon: "flash-outline", color: "#8B5CF6", label: "Activity" },
+  food: {
+    icon: "restaurant-outline",
+    color: "#F97316",
+    label: "Food & Dining",
+  },
+  transport: { icon: "car-outline", color: Colors.primary, label: "Transport" },
+  accommodation: {
+    icon: "bed-outline",
+    color: Colors.secondary,
+    label: "Accommodation",
+  },
+  sightseeing: {
+    icon: "camera-outline",
+    color: Colors.accent,
+    label: "Sightseeing",
+  },
+  other: {
+    icon: "ellipsis-horizontal-outline",
+    color: "#64748B",
+    label: "Other",
+  },
 };
 
 export default function ItineraryItemDetailScreen() {
   const router = useRouter();
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
 
   const { item, loading, error } = useItineraryItem(itemId);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState('');
+  const [newComment, setNewComment] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editLocation, setEditLocation] = useState('');
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editLocation, setEditLocation] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const config = item ? (CATEGORY_CONFIG[item.category || 'other'] || CATEGORY_CONFIG.other) : CATEGORY_CONFIG.other;
+  const config = item
+    ? CATEGORY_CONFIG[item.category || "other"] || CATEGORY_CONFIG.other
+    : CATEGORY_CONFIG.other;
 
   const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
+    return new Date(date).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
       hour12: true,
     });
   };
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', { 
-      weekday: 'long',
-      month: 'long', 
-      day: 'numeric',
-      year: 'numeric',
+    return new Date(date).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
   const handleEdit = () => {
     if (item) {
-      setEditTitle(item.title || '');
-      setEditDescription(item.description || '');
-      setEditLocation(item.location || '');
+      setEditTitle(item.title || "");
+      setEditDescription(item.description || "");
+      setEditLocation(item.location || "");
       setIsEditModalVisible(true);
     }
   };
 
   const handleSaveEdit = async () => {
     if (!itemId || !editTitle.trim()) {
-      Alert.alert('Error', 'Title is required');
+      Alert.alert("Error", "Title is required");
       return;
     }
 
@@ -111,8 +138,8 @@ export default function ItineraryItemDetailScreen() {
       });
       setIsEditModalVisible(false);
     } catch (err) {
-      console.error('Error updating item:', err);
-      Alert.alert('Error', 'Failed to update activity');
+      console.error("Error updating item:", err);
+      Alert.alert("Error", "Failed to update activity");
     } finally {
       setIsSaving(false);
     }
@@ -120,13 +147,13 @@ export default function ItineraryItemDetailScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete Activity',
-      'Are you sure you want to delete this activity?',
+      "Delete Activity",
+      "Are you sure you want to delete this activity?",
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive', 
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               if (itemId) {
@@ -134,19 +161,24 @@ export default function ItineraryItemDetailScreen() {
               }
               router.back();
             } catch (err) {
-              console.error('Error deleting item:', err);
-              Alert.alert('Error', 'Failed to delete activity');
+              console.error("Error deleting item:", err);
+              Alert.alert("Error", "Failed to delete activity");
             }
-          } 
+          },
         },
-      ]
+      ],
     );
   };
 
   const handleAddAttachment = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        type: [
+          "application/pdf",
+          "image/*",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ],
         copyToCacheDirectory: true,
       });
 
@@ -155,24 +187,24 @@ export default function ItineraryItemDetailScreen() {
         const newAttachment: Attachment = {
           id: Date.now().toString(),
           name: asset.name,
-          type: asset.mimeType || 'application/octet-stream',
+          type: asset.mimeType || "application/octet-stream",
           uri: asset.uri,
           size: asset.size,
         };
         setAttachments([...attachments, newAttachment]);
       }
     } catch (err) {
-      console.error('Error picking document:', err);
-      Alert.alert('Error', 'Failed to pick document');
+      console.error("Error picking document:", err);
+      Alert.alert("Error", "Failed to pick document");
     }
   };
 
   const handleRemoveAttachment = (attachmentId: string) => {
-    setAttachments(attachments.filter(a => a.id !== attachmentId));
+    setAttachments(attachments.filter((a) => a.id !== attachmentId));
   };
 
   const formatFileSize = (bytes?: number) => {
-    if (!bytes) return '';
+    if (!bytes) return "";
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -180,26 +212,31 @@ export default function ItineraryItemDetailScreen() {
 
   const handleAddComment = () => {
     if (!newComment.trim()) return;
-    
+
     setComments([
       ...comments,
       {
         id: Date.now().toString(),
-        userId: 'user1',
-        userName: 'You',
+        userId: "user1",
+        userName: "You",
         text: newComment,
         createdAt: new Date(),
       },
     ]);
-    setNewComment('');
+    setNewComment("");
   };
 
   const handleOpenMap = () => {
     if (item?.latitude != null && item?.longitude != null) {
       // Open in native maps app
-      const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
+      const scheme = Platform.select({
+        ios: "maps:0,0?q=",
+        android: "geo:0,0?q=",
+      });
       const latLng = `${item.latitude},${item.longitude}`;
-      const label = encodeURIComponent(item.title || item.location || 'Location');
+      const label = encodeURIComponent(
+        item.title || item.location || "Location",
+      );
       const url = Platform.select({
         ios: `${scheme}${label}@${latLng}`,
         android: `${scheme}${latLng}(${label})`,
@@ -216,19 +253,25 @@ export default function ItineraryItemDetailScreen() {
       });
       Linking.openURL(url as string);
     } else {
-      Alert.alert('No Location', 'This activity does not have a location set.');
+      Alert.alert("No Location", "This activity does not have a location set.");
     }
   };
 
   if (loading) {
     return (
-      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
+      <ScreenContainer
+        style={styles.container}
+        backgroundColor={colors.background}
+        padded={false}
+      >
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading activity...</Text>
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading activity...
+          </Text>
         </View>
       </ScreenContainer>
     );
@@ -236,7 +279,11 @@ export default function ItineraryItemDetailScreen() {
 
   if (error) {
     return (
-      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
+      <ScreenContainer
+        style={styles.container}
+        backgroundColor={colors.background}
+        padded={false}
+      >
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -244,7 +291,9 @@ export default function ItineraryItemDetailScreen() {
           <EmptyState
             icon="alert-circle-outline"
             title="Failed to load activity"
-            description={error.message || "Something went wrong. Please try again."}
+            description={
+              error.message || "Something went wrong. Please try again."
+            }
           />
         </View>
       </ScreenContainer>
@@ -253,7 +302,11 @@ export default function ItineraryItemDetailScreen() {
 
   if (!item) {
     return (
-      <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
+      <ScreenContainer
+        style={styles.container}
+        backgroundColor={colors.background}
+        padded={false}
+      >
         <View style={styles.header}>
           <View style={styles.headerPlaceholder} />
         </View>
@@ -269,27 +322,27 @@ export default function ItineraryItemDetailScreen() {
   }
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded={false}>
+    <ScreenContainer
+      style={styles.container}
+      backgroundColor={colors.background}
+      padded={false}
+    >
       {/* Header */}
       <ScreenHeader
-        title={item.title}
+        title="Itinerary"
+        showBack={false}
         left={null}
-        right={(
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={handleEdit}
-              style={[styles.headerButton, { backgroundColor: colors.backgroundSecondary }]}
-            >
-              <Ionicons name="pencil-outline" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleDelete}
-              style={[styles.headerButton, { backgroundColor: Colors.error + '15' }]}
-            >
-              <Ionicons name="trash-outline" size={20} color={Colors.error} />
-            </TouchableOpacity>
-          </View>
-        )}
+        right={
+          <TouchableOpacity
+            onPress={handleDelete}
+            style={[
+              styles.headerButton,
+              { backgroundColor: Colors.error + "15" },
+            ]}
+          >
+            <Ionicons name="trash-outline" size={20} color={Colors.error} />
+          </TouchableOpacity>
+        }
       />
 
       <ScrollView
@@ -298,9 +351,16 @@ export default function ItineraryItemDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Category Badge */}
-        <View style={[styles.categoryBadge, { backgroundColor: config.color + '15' }]}>
+        <View
+          style={[
+            styles.categoryBadge,
+            { backgroundColor: config.color + "15" },
+          ]}
+        >
           <Ionicons name={config.icon} size={16} color={config.color} />
-          <Text style={[styles.categoryText, { color: config.color }]}>{config.label}</Text>
+          <Text style={[styles.categoryText, { color: config.color }]}>
+            {config.label}
+          </Text>
         </View>
 
         {/* Title */}
@@ -309,13 +369,21 @@ export default function ItineraryItemDetailScreen() {
         {/* Time & Date */}
         <View style={styles.timeSection}>
           <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+            <Ionicons
+              name="calendar-outline"
+              size={20}
+              color={colors.textSecondary}
+            />
             <Text style={[styles.infoText, { color: colors.text }]}>
               {item.startTime && formatDate(item.startTime)}
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+            <Ionicons
+              name="time-outline"
+              size={20}
+              color={colors.textSecondary}
+            />
             <Text style={[styles.infoText, { color: colors.text }]}>
               {item.startTime && formatTime(item.startTime)}
               {item.endTime && ` - ${formatTime(item.endTime)}`}
@@ -326,25 +394,50 @@ export default function ItineraryItemDetailScreen() {
         {/* Location */}
         {item.location && (
           <TouchableOpacity
-            style={[styles.locationCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.locationCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
             onPress={handleOpenMap}
           >
-            <View style={[styles.locationIcon, { backgroundColor: Colors.primary + '15' }]}>
+            <View
+              style={[
+                styles.locationIcon,
+                { backgroundColor: Colors.primary + "15" },
+              ]}
+            >
               <Ionicons name="location" size={24} color={Colors.primary} />
             </View>
             <View style={styles.locationContent}>
-              <Text style={[styles.locationLabel, { color: colors.textSecondary }]}>Location</Text>
-              <Text style={[styles.locationText, { color: colors.text }]}>{item.location}</Text>
+              <Text
+                style={[styles.locationLabel, { color: colors.textSecondary }]}
+              >
+                Location
+              </Text>
+              <Text style={[styles.locationText, { color: colors.text }]}>
+                {item.location}
+              </Text>
             </View>
-            <Ionicons name="navigate-outline" size={24} color={Colors.primary} />
+            <Ionicons
+              name="navigate-outline"
+              size={24}
+              color={Colors.primary}
+            />
           </TouchableOpacity>
         )}
 
         {/* Description */}
         {item.description && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Notes</Text>
-            <View style={[styles.descriptionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Notes
+            </Text>
+            <View
+              style={[
+                styles.descriptionCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <Text style={[styles.descriptionText, { color: colors.text }]}>
                 {item.description}
               </Text>
@@ -360,26 +453,43 @@ export default function ItineraryItemDetailScreen() {
           {attachments.map((attachment) => (
             <View
               key={attachment.id}
-              style={[styles.attachmentCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[
+                styles.attachmentCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
             >
-              <View style={[styles.attachmentIcon, { backgroundColor: Colors.primary + '15' }]}>
-                <Ionicons 
-                  name={attachment.type.includes('image') ? 'image-outline' : 'document-outline'} 
-                  size={20} 
-                  color={Colors.primary} 
+              <View
+                style={[
+                  styles.attachmentIcon,
+                  { backgroundColor: Colors.primary + "15" },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    attachment.type.includes("image")
+                      ? "image-outline"
+                      : "document-outline"
+                  }
+                  size={20}
+                  color={Colors.primary}
                 />
               </View>
               <View style={styles.attachmentContent}>
-                <Text style={[styles.attachmentName, { color: colors.text }]} numberOfLines={1}>
+                <Text
+                  style={[styles.attachmentName, { color: colors.text }]}
+                  numberOfLines={1}
+                >
                   {attachment.name}
                 </Text>
                 {attachment.size && (
-                  <Text style={[styles.attachmentSize, { color: colors.textMuted }]}>
+                  <Text
+                    style={[styles.attachmentSize, { color: colors.textMuted }]}
+                  >
                     {formatFileSize(attachment.size)}
                   </Text>
                 )}
               </View>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => handleRemoveAttachment(attachment.id)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -391,8 +501,14 @@ export default function ItineraryItemDetailScreen() {
             style={[styles.attachButton, { borderColor: colors.border }]}
             onPress={handleAddAttachment}
           >
-            <Ionicons name="add-outline" size={24} color={colors.textSecondary} />
-            <Text style={[styles.attachText, { color: colors.textSecondary }]}>Add attachment</Text>
+            <Ionicons
+              name="add-outline"
+              size={24}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.attachText, { color: colors.textSecondary }]}>
+              Add attachment
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -404,9 +520,17 @@ export default function ItineraryItemDetailScreen() {
           {comments.map((comment) => (
             <View
               key={comment.id}
-              style={[styles.commentCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[
+                styles.commentCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
             >
-              <View style={[styles.avatar, { backgroundColor: Colors.primary + '20' }]}>
+              <View
+                style={[
+                  styles.avatar,
+                  { backgroundColor: Colors.primary + "20" },
+                ]}
+              >
                 <Text style={[styles.avatarText, { color: Colors.primary }]}>
                   {comment.userName.charAt(0)}
                 </Text>
@@ -416,11 +540,15 @@ export default function ItineraryItemDetailScreen() {
                   <Text style={[styles.commentAuthor, { color: colors.text }]}>
                     {comment.userName}
                   </Text>
-                  <Text style={[styles.commentTime, { color: colors.textMuted }]}>
+                  <Text
+                    style={[styles.commentTime, { color: colors.textMuted }]}
+                  >
                     {new Date(comment.createdAt).toLocaleDateString()}
                   </Text>
                 </View>
-                <Text style={[styles.commentText, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.commentText, { color: colors.textSecondary }]}
+                >
                   {comment.text}
                 </Text>
               </View>
@@ -431,12 +559,20 @@ export default function ItineraryItemDetailScreen() {
 
       {/* Comment Input */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        <View style={[styles.commentInputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.commentInputContainer,
+            { backgroundColor: colors.background, borderColor: colors.border },
+          ]}
+        >
           <TextInput
-            style={[styles.commentInput, { backgroundColor: colors.inputBackground, color: colors.text }]}
+            style={[
+              styles.commentInput,
+              { backgroundColor: colors.inputBackground, color: colors.text },
+            ]}
             placeholder="Add a comment..."
             placeholderTextColor={colors.placeholder}
             value={newComment}
@@ -461,24 +597,48 @@ export default function ItineraryItemDetailScreen() {
         onRequestClose={() => setIsEditModalVisible(false)}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScreenContainer style={styles.modalContainer} backgroundColor={colors.background}>
+          <ScreenContainer
+            style={styles.modalContainer}
+            backgroundColor={colors.background}
+          >
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
-                <Text style={[styles.modalCancel, { color: Colors.primary }]}>Cancel</Text>
+                <Text style={[styles.modalCancel, { color: Colors.primary }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Activity</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Edit Activity
+              </Text>
               <TouchableOpacity onPress={handleSaveEdit} disabled={isSaving}>
-                <Text style={[styles.modalSave, { color: isSaving ? colors.textMuted : Colors.primary }]}>
-                  {isSaving ? 'Saving...' : 'Save'}
+                <Text
+                  style={[
+                    styles.modalSave,
+                    { color: isSaving ? colors.textMuted : Colors.primary },
+                  ]}
+                >
+                  {isSaving ? "Saving..." : "Save"}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent}>
+            <ScrollView
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalScrollContent}
+            >
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Title *</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Title *
+                </Text>
                 <TextInput
-                  style={[styles.modalInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }]}
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   value={editTitle}
                   onChangeText={setEditTitle}
                   placeholder="Activity title"
@@ -487,9 +647,18 @@ export default function ItineraryItemDetailScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Location</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Location
+                </Text>
                 <TextInput
-                  style={[styles.modalInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }]}
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   value={editLocation}
                   onChangeText={setEditLocation}
                   placeholder="Location or address"
@@ -498,12 +667,18 @@ export default function ItineraryItemDetailScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Notes</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Notes
+                </Text>
                 <TextInput
                   style={[
-                    styles.modalInput, 
+                    styles.modalInput,
                     styles.modalTextArea,
-                    { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
                   ]}
                   value={editDescription}
                   onChangeText={setEditDescription}
@@ -527,9 +702,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
@@ -538,15 +713,15 @@ const styles = StyleSheet.create({
     height: 40,
   },
   headerActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Spacing.sm,
   },
   headerButton: {
     width: 40,
     height: 40,
     borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   scrollView: {
     flex: 1,
@@ -556,9 +731,9 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxl,
   },
   categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -579,16 +754,16 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.sm,
   },
   infoText: {
     fontSize: FontSizes.md,
   },
   locationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
@@ -599,8 +774,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   locationContent: {
     flex: 1,
@@ -631,20 +806,20 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   attachButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
-    borderStyle: 'dashed',
+    borderStyle: "dashed",
     gap: Spacing.sm,
   },
   attachText: {
     fontSize: FontSizes.md,
   },
   commentCard: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
@@ -655,8 +830,8 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: FontSizes.md,
@@ -666,9 +841,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   commentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 4,
   },
   commentAuthor: {
@@ -683,8 +858,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     padding: Spacing.md,
     paddingBottom: Spacing.lg,
     borderTopWidth: 1,
@@ -702,13 +877,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   loadingText: {
     marginTop: Spacing.md,
@@ -720,8 +895,8 @@ const styles = StyleSheet.create({
   },
   // Attachment styles
   attachmentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: Spacing.sm,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
@@ -732,8 +907,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   attachmentContent: {
     flex: 1,
@@ -751,13 +926,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    borderBottomColor: "rgba(0,0,0,0.1)",
   },
   modalTitle: {
     fontSize: FontSizes.lg,

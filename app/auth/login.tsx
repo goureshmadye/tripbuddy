@@ -1,5 +1,5 @@
-import { ScreenHeader } from '@/components/navigation/screen-header';
-import { ScreenContainer } from '@/components/screen-container';
+import { ScreenHeader } from "@/components/navigation/screen-header";
+import { ScreenContainer } from "@/components/screen-container";
 import { Button } from "@/components/ui/button";
 import { Divider } from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
     validateLoginForm,
 } from "@/utils/validation";
 import { Ionicons } from "@expo/vector-icons";
+import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -39,18 +40,46 @@ export default function LoginScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { signInWithEmail, signInWithGoogle, isOnboardingComplete, enableGuestMode } =
-    useAuth();
+  const {
+    signInWithEmail,
+    signInWithGoogle,
+    isOnboardingComplete,
+    enableGuestMode,
+  } = useAuth();
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+  });
+
+  useEffect(() => {
+    if (response?.type === "success") {
+      const { id_token } = response.params;
+      if (id_token) {
+        setGoogleLoading(true);
+        signInWithGoogle(id_token)
+          .then(navigateAfterAuth)
+          .catch((error: any) => {
+            Alert.alert(
+              "Google Sign-In Failed",
+              error?.message || "Unknown error",
+            );
+          })
+          .finally(() => setGoogleLoading(false));
+      }
+    }
+  }, [response]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
-    {}
+    {},
   );
   const [touched, setTouched] = useState<{ email: boolean; password: boolean }>(
-    { email: false, password: false }
+    { email: false, password: false },
   );
 
   // Rate limiting state
@@ -201,7 +230,7 @@ export default function LoginScreen() {
           "Login Failed",
           result.remainingAttempts > 0
             ? `${errorMessage}\n\n${result.remainingAttempts} attempts remaining.`
-            : errorMessage
+            : errorMessage,
         );
       }
     } finally {
@@ -210,17 +239,25 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    try {
-      await signInWithGoogle();
-      navigateAfterAuth();
-    } catch (error) {
-      Alert.alert(
-        "Google Sign-In Failed",
-        error instanceof Error ? error.message : "An error occurred"
-      );
-    } finally {
-      setGoogleLoading(false);
+    if (Platform.OS !== "web") {
+      try {
+        await promptAsync();
+      } catch (e) {
+        Alert.alert("Error", "Failed to start Google Sign-In");
+      }
+    } else {
+      setGoogleLoading(true);
+      try {
+        await signInWithGoogle();
+        navigateAfterAuth();
+      } catch (error) {
+        Alert.alert(
+          "Google Sign-In Failed",
+          error instanceof Error ? error.message : "An error occurred",
+        );
+      } finally {
+        setGoogleLoading(false);
+      }
     }
   };
 
@@ -241,7 +278,7 @@ export default function LoginScreen() {
             router.replace("/(tabs)");
           },
         },
-      ]
+      ],
     );
   };
 
@@ -252,7 +289,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+    <ScreenContainer
+      style={styles.container}
+      backgroundColor={colors.background}
+      padded
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
@@ -278,11 +319,15 @@ export default function LoginScreen() {
           {/* Lockout Warning */}
           {isLocked && (
             <View
-              style={[styles.lockoutBanner, { backgroundColor: Colors.error + "15" }]}
+              style={[
+                styles.lockoutBanner,
+                { backgroundColor: Colors.error + "15" },
+              ]}
             >
               <Ionicons name="lock-closed" size={20} color={Colors.error} />
               <Text style={[styles.lockoutText, { color: Colors.error }]}>
-                Too many failed attempts. Try again in {formatTime(lockoutSeconds)}
+                Too many failed attempts. Try again in{" "}
+                {formatTime(lockoutSeconds)}
               </Text>
             </View>
           )}
@@ -328,7 +373,9 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <Button
-              title={isLocked ? `Locked (${formatTime(lockoutSeconds)})` : "Sign In"}
+              title={
+                isLocked ? `Locked (${formatTime(lockoutSeconds)})` : "Sign In"
+              }
               onPress={handleLogin}
               loading={loading}
               disabled={!isFormValid || loading || isLocked}
@@ -370,7 +417,10 @@ export default function LoginScreen() {
           </View>
 
           {/* Guest Mode */}
-          <TouchableOpacity onPress={handleGuestMode} style={styles.guestButton}>
+          <TouchableOpacity
+            onPress={handleGuestMode}
+            style={styles.guestButton}
+          >
             <Ionicons
               name="person-outline"
               size={18}
