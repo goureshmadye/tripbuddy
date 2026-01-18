@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
 import {
     Auth,
@@ -27,6 +26,10 @@ const firebaseConfig = {
 // Initialize Firebase - check if already initialized
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
+import { SecureStoreAdapter } from "@/utils/secure-store-adapter";
+
+// ... imports
+
 // Initialize Firebase Auth with persistence based on platform
 let auth: Auth;
 if (Platform.OS === "web") {
@@ -34,10 +37,10 @@ if (Platform.OS === "web") {
   // For web, set persistence
   auth.setPersistence(browserLocalPersistence);
 } else {
-  // For React Native, use initializeAuth with try-catch to handle re-initialization
+  // For React Native, use initializeAuth with secure persistence
   try {
     auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
+      persistence: getReactNativePersistence(SecureStoreAdapter),
     });
   } catch (error: any) {
     // If already initialized, just get the existing instance

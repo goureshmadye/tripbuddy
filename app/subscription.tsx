@@ -1,16 +1,15 @@
 import { ScreenContainer } from "@/components/screen-container";
 import {
-    BorderRadius,
-    Colors,
-    FontSizes,
-    FontWeights,
-    Spacing,
+  BorderRadius,
+  Colors,
+  FontSizes,
+  FontWeights,
+  Spacing,
 } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useGlobalPricing } from "@/hooks/use-global-pricing";
 import { usePlans, useSubscription } from "@/hooks/use-subscription";
 import { useAppColorScheme } from "@/hooks/use-theme";
-import { useUsageLimits } from "@/hooks/use-usage-limits";
 import { PaymentService } from "@/services/payment";
 import { PricingService } from "@/services/pricing";
 import { BillingCycle, PlanInfo, SubscriptionPlan } from "@/types/subscription";
@@ -19,12 +18,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function SubscriptionScreen() {
@@ -35,14 +34,7 @@ export default function SubscriptionScreen() {
 
   const { user } = useAuth();
   const { plans, currentPlan, currentPlanInfo } = usePlans();
-  const {
-    subscription,
-    upgradePlan,
-    cancelPlan,
-    reactivatePlan,
-    daysUntilRenewal,
-  } = useSubscription();
-  const { usage } = useUsageLimits();
+  const { subscription, upgradePlan, daysUntilRenewal } = useSubscription();
 
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -304,7 +296,7 @@ export default function SubscriptionScreen() {
               color={Colors.primary}
             />
             <Text style={[styles.currentPlanText, { color: colors.text }]}>
-              You're on {currentPlanInfo?.name}
+              You&apos;re on {currentPlanInfo?.name}
             </Text>
             <Text
               style={[
@@ -321,7 +313,6 @@ export default function SubscriptionScreen() {
 
         {/* Plans */}
         {plans.map((plan) => {
-          const isPro = plan.id === "pro";
           const isTeams = plan.id === "teams";
           const accentColor = isTeams ? "#F97316" : Colors.primary;
           const isCurrent = isCurrentPlan(plan.id);

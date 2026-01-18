@@ -3,11 +3,11 @@ import { ScreenContainer } from "@/components/screen-container";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  BorderRadius,
-  Colors,
-  FontSizes,
-  FontWeights,
-  Spacing,
+    BorderRadius,
+    Colors,
+    FontSizes,
+    FontWeights,
+    Spacing,
 } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -22,14 +22,14 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 const CATEGORIES: {
@@ -102,7 +102,6 @@ export default function AddItineraryItemScreen() {
       mimeType?: string;
     }[]
   >([]);
-  const [uploading, setUploading] = useState(false);
 
   const handlePickAttachment = () => {
     Alert.alert("Add Attachment", "Choose a source", [
@@ -238,7 +237,6 @@ export default function AddItineraryItemScreen() {
 
       // Upload attachments if any
       if (attachments.length > 0) {
-        setUploading(true);
         await Promise.all(
           attachments.map(async (file) => {
             try {
