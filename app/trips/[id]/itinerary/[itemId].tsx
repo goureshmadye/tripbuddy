@@ -114,15 +114,6 @@ export default function ItineraryItemDetailScreen() {
     });
   };
 
-  const handleEdit = () => {
-    if (item) {
-      setEditTitle(item.title || "");
-      setEditDescription(item.description || "");
-      setEditLocation(item.location || "");
-      setIsEditModalVisible(true);
-    }
-  };
-
   const handleSaveEdit = async () => {
     if (!itemId || !editTitle.trim()) {
       Alert.alert("Error", "Title is required");

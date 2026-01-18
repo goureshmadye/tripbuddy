@@ -40,18 +40,17 @@ TripBuddy is a collaborative, mobile-first travel planning app. It centralizes i
 Below are screenshots of the main app screens (Version 01):
 
 <div align="center">
-  <img src="assets/images/trips_screen.jpg" alt="Trips Screen" width="200" />
-  <img src="assets/images/itenary_screen.jpg" alt="Itinerary Screen" width="200" />
-  <img src="assets/images/expenses_screen.jpg" alt="Expenses Screen" width="200" />
-  <img src="assets/images/documents_screen.jpg" alt="Documents Screen" width="200" />
+  <img src="assets/images/HomeScreen.png" alt="Home Screen" width="200" />
+  <img src="assets/images/TripScreen.png" alt="Trip Details" width="200" />
+  <img src="assets/images/ItenaryScreen.png" alt="Itinerary" width="200" />
+  <img src="assets/images/MapScreen.png" alt="Map View" width="200" />
 </div>
-
+<br />
 <div align="center">
-  <img src="assets/images/maps_screen.jpg" alt="Maps Screen" width="200" />
-  <img src="assets/images/notifications_screen.jpg" alt="Notifications Screen" width="200" />
-  <img src="assets/images/profile_screen.jpg" alt="Profile Screen" width="200" />
-  <img src="assets/images/subscription_screen.jpg" alt="Subscription Screen" width="200" />
-  <img src="assets/images/trip_members_screen.jpg" alt="Trip Members Screen" width="200" />
+  <img src="assets/images/ExpensesScreen.png" alt="Expenses" width="200" />
+  <img src="assets/images/TripMemberScreen.png" alt="Collaborators" width="200" />
+  <img src="assets/images/ProfieScreen.png" alt="Profile" width="200" />
+  <img src="assets/images/SubscriptionScreen.png" alt="Subscription" width="200" />
 </div>
 
 ---

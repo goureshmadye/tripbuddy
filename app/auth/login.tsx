@@ -47,7 +47,15 @@ export default function LoginScreen() {
     enableGuestMode,
   } = useAuth();
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
+  const navigateAfterAuth = useCallback(() => {
+    if (isOnboardingComplete) {
+      router.replace("/(tabs)");
+    } else {
+      router.replace("/auth/onboarding");
+    }
+  }, [isOnboardingComplete, router]);
+
+  const [, response, promptAsync] = Google.useAuthRequest({
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
@@ -69,7 +77,7 @@ export default function LoginScreen() {
           .finally(() => setGoogleLoading(false));
       }
     }
-  }, [response]);
+  }, [response, navigateAfterAuth, signInWithGoogle]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -173,14 +181,6 @@ export default function LoginScreen() {
     }
   };
 
-  const navigateAfterAuth = () => {
-    if (isOnboardingComplete) {
-      router.replace("/(tabs)");
-    } else {
-      router.replace("/auth/onboarding");
-    }
-  };
-
   const handleLogin = async () => {
     // Check rate limit first
     const rateLimit = await checkRateLimit();
@@ -242,7 +242,7 @@ export default function LoginScreen() {
     if (Platform.OS !== "web") {
       try {
         await promptAsync();
-      } catch (e) {
+      } catch {
         Alert.alert("Error", "Failed to start Google Sign-In");
       }
     } else {

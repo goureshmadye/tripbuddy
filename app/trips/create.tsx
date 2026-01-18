@@ -4,46 +4,46 @@ import { UpgradePrompt } from "@/components/subscription";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  BorderRadius,
-  Colors,
-  FontSizes,
-  FontWeights,
-  Spacing,
+    BorderRadius,
+    Colors,
+    FontSizes,
+    FontWeights,
+    Spacing,
 } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useUsageLimits } from "@/hooks/use-usage-limits";
 import {
-  addCollaborator,
-  createItineraryItem,
-  createTrip,
-  getUserByEmail,
+    addCollaborator,
+    createItineraryItem,
+    createTrip,
+    getUserByEmail,
 } from "@/services/firestore";
 import {
-  convertToItineraryItems,
-  GeneratedTripPlan,
-  generateTripPlan,
+    convertToItineraryItems,
+    GeneratedTripPlan,
+    generateTripPlan,
 } from "@/services/gemini";
 import {
-  autocompletePlaces,
-  getPlaceDetails,
-  PlaceSuggestion,
+    autocompletePlaces,
+    getPlaceDetails,
+    PlaceSuggestion,
 } from "@/services/google-places";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 // Currency configuration with symbols and budget thresholds
@@ -482,7 +482,7 @@ export default function CreateTripScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
 
   const { user } = useAuth();
-  const { canCreate } = useUsageLimits();
+  const { canCreate, checkLimit } = useUsageLimits();
 
   // Get budget ranges based on user's currency
   const userCurrency = user?.defaultCurrency || "USD";
@@ -678,7 +678,6 @@ export default function CreateTripScreen() {
     }
 
     // Check collaborator limit (invited + 1 for creator)
-    const { checkLimit } = useUsageLimits();
     const collabLimit = checkLimit("maxCollaboratorsPerTrip");
 
     if (
@@ -1116,7 +1115,7 @@ export default function CreateTripScreen() {
               {/* Trip Type */}
               <View style={styles.optionSection}>
                 <Text style={[styles.optionTitle, { color: colors.text }]}>
-                  What's the main purpose of this trip?
+                  What&apos;s the main purpose of this trip?
                 </Text>
                 <View style={styles.optionsGrid}>
                   {TRIP_TYPES.map((type) => (
@@ -1167,7 +1166,7 @@ export default function CreateTripScreen() {
               {/* Budget Range */}
               <View style={styles.optionSection}>
                 <Text style={[styles.optionTitle, { color: colors.text }]}>
-                  What's your total budget for this trip?
+                  What&apos;s your total budget for this trip?
                 </Text>
                 <View style={styles.budgetGrid}>
                   {BUDGET_RANGES.map((budget) => (

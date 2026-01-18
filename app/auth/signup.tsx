@@ -35,7 +35,16 @@ export default function SignupScreen() {
   const { signUpWithEmail, signInWithGoogle, isWalkthroughComplete } =
     useAuth();
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
+  const navigateAfterSignup = useCallback(() => {
+    // New users go to walkthrough first, then onboarding
+    if (!isWalkthroughComplete) {
+      router.replace("/auth/walkthrough");
+    } else {
+      router.replace("/auth/onboarding");
+    }
+  }, [isWalkthroughComplete, router]);
+
+  const [, response, promptAsync] = Google.useAuthRequest({
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
@@ -57,7 +66,7 @@ export default function SignupScreen() {
           .finally(() => setGoogleLoading(false));
       }
     }
-  }, [response]);
+  }, [response, navigateAfterSignup, signInWithGoogle]);
 
   // Form state - NO NAME FIELD (collected in onboarding)
   const [email, setEmail] = useState("");
@@ -211,15 +220,6 @@ export default function SignupScreen() {
     validateConfirmPasswordField(confirmPassword);
   };
 
-  const navigateAfterSignup = () => {
-    // New users go to walkthrough first, then onboarding
-    if (!isWalkthroughComplete) {
-      router.replace("/auth/walkthrough");
-    } else {
-      router.replace("/auth/onboarding");
-    }
-  };
-
   const handleSignup = async () => {
     // Final validation
     const { isValid, errors: validationErrors } = validateSignupForm({
@@ -269,7 +269,7 @@ export default function SignupScreen() {
     if (Platform.OS !== "web") {
       try {
         await promptAsync();
-      } catch (e) {
+      } catch {
         Alert.alert("Error", "Failed to start Google Sign-In");
       }
     } else {
