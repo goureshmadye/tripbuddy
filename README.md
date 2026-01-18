@@ -27,50 +27,11 @@ TripBuddy is a collaborative, mobile-first travel planning app. It centralizes i
 ## 🛠️ Tech Stack
 
 - **Frontend:** React Native (Expo, TypeScript)
-- **Backend:** Node.js/Express.js (planned/optional), Prisma ORM, PostgreSQL
+- **Backend:** Node.js/Express.js.
 - **Auth & Storage:** Firebase (Auth, Firestore, Storage, Messaging)
 - **Maps:** Google Maps SDK & Places API
 - **AI:** Gemini/OpenAI API
 - **Payments:** Razorpay (Native SDK)
-
----
-
-## 🏁 Getting Started
-
-1. **Install dependencies:**
-
-```sh
-npm install
-```
-
-2. **Start the app:**
-
-```sh
-npm start
-# or
-expo start
-```
-
-3. **Platform-specific:**
-
-```sh
-# For development with native modules (Required for Maps & Payments):
-npx expo run:android
-# or
-npx expo run:ios
-```
-
-> **Note:** Features like Razorpay Payments and Google Maps require a native build. They will **not** work in the standard Expo Go client.
-
-## 🤖 AI Suggestions
-
-- **Gemini AI:** Get smart itinerary suggestions, route optimization, and travel highlights.
-
----
-
-## 🌐 Offline Support
-
-- Access itineraries, documents, and maps in read-only mode when offline.
 
 ---
 
@@ -98,7 +59,7 @@ Below are screenshots of the main app screens (Version 01):
 
 TripBuddy is a mobile-first application designed to streamline travel planning. It solves the fragmentation problem of using spreadsheets, group chats, and disparate booking apps. By centralizing itineraries, expenses, documents, and real-time collaboration, TripBuddy acts as a single source of truth for solo travelers and groups.
 
-**2\. Functional Specifications (MVP)**
+## **2\. Functional Specifications (MVP)**
 
 ### 2.1. Authentication & Onboarding
 
@@ -130,3 +91,25 @@ TripBuddy is a mobile-first application designed to streamline travel planning. 
 
 - **Storage:** Upload tickets, hotel vouchers, and IDs.
 - **Offline Sync:** Read-only access to itinerary and documents when no internet is available.
+
+## 3\. System Architecture
+
+### 3.1. External Integrations
+
+| Service                      | Purpose                                                  |
+| ---------------------------- | -------------------------------------------------------- |
+| Google Maps SDK & Places API | Rendering maps, autocomplete search, routing.            |
+| Razorpay                     | Native SDK for subscription payments and settlements.    |
+| Gemini API                   | AI-powered itinerary suggestions and route optimization. |
+| Firebase Cloud Messaging     | Real-time push notifications.                            |
+| Nylas / MailboxLayer         | Email parsing for auto-importing bookings.               |
+
+## 4\. Development Roadmap
+
+### Phase 1: Foundation (Weeks 1-4)
+
+### Phase 2: Core Experience (Weeks 5-8)
+
+### Phase 3: Utility Features (Weeks 9-12)
+
+### Phase 4: Polish & Pro (Weeks 13-16)
