@@ -8,15 +8,24 @@ import {
     setOnboardingComplete as setOnboardingCompleteService,
     setWalkthroughComplete as setWalkthroughCompleteService,
     signInWithEmail as signInWithEmailService,
+    signInWithGoogleCredential as signInWithGoogleCredentialService,
     signInWithGoogle as signInWithGoogleService,
     signUpWithEmail as signUpWithEmailService,
     updateUserDocument,
-    uploadProfilePhoto as uploadProfilePhotoService
+    uploadProfilePhoto as uploadProfilePhotoService,
 } from "@/services/auth";
-import { getTrip, getUserPendingInvitations, updateInvitationUserId } from "@/services/firestore";
+import {
+    getTrip,
+    getUserPendingInvitations,
+    updateInvitationUserId,
+} from "@/services/firestore";
 import { checkGuestMode, setGuestMode } from "@/services/guest-mode";
 import { notifyTripInvitation } from "@/services/notifications";
-import { cacheUserSession, clearCachedSession, getCachedUser } from "@/services/offline";
+import {
+    cacheUserSession,
+    clearCachedSession,
+    getCachedUser,
+} from "@/services/offline";
 import { User } from "@/types/database";
 import {
     AuthError,
@@ -45,9 +54,9 @@ interface AuthContextType {
   signUpWithEmail: (
     email: string,
     password: string,
-    name?: string
+    name?: string,
   ) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (idToken?: string) => Promise<void>;
   signOutUser: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -63,33 +72,38 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Helper function to check for pending invitations when a new user signs up
-const checkPendingInvitationsForNewUser = async (userId: string, email: string) => {
+const checkPendingInvitationsForNewUser = async (
+  userId: string,
+  email: string,
+) => {
   try {
     const pendingInvitations = await getUserPendingInvitations(email);
-    
+
     for (const invitation of pendingInvitations) {
       // Update the invitation with the new user's ID
       await updateInvitationUserId(invitation.id, userId);
-      
+
       // Get trip details for the notification
       const trip = await getTrip(invitation.tripId);
-      
+
       // Send notification to the new user about their pending invitation
       await notifyTripInvitation(
         userId,
         invitation.tripId,
-        trip?.title || 'Trip',
-        'Someone', // We don't have inviter name readily available
+        trip?.title || "Trip",
+        "Someone", // We don't have inviter name readily available
         invitation.invitedBy,
-        invitation.id
+        invitation.id,
       );
     }
-    
+
     if (pendingInvitations.length > 0) {
-      console.log(`Sent ${pendingInvitations.length} pending invitation notifications to new user ${userId}`);
+      console.log(
+        `Sent ${pendingInvitations.length} pending invitation notifications to new user ${userId}`,
+      );
     }
   } catch (error) {
-    console.error('Error checking pending invitations for new user:', error);
+    console.error("Error checking pending invitations for new user:", error);
   }
 };
 
@@ -108,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     checkWalkthroughComplete().then(setIsWalkthroughComplete);
     checkGuestMode().then(setIsGuestMode);
-    
+
     // Load cached user for offline access
     getCachedUser().then((cachedUser) => {
       if (cachedUser && !user) {
@@ -148,11 +162,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   onboardingComplete: data.onboardingComplete || false,
                   walkthroughComplete: data.walkthroughComplete || false,
                   createdAt: data.createdAt?.toDate() || new Date(),
-                  subscriptionTier: data.subscriptionTier || 'free',
+                  subscriptionTier: data.subscriptionTier || "free",
+                  upiId: data.upiId || null,
                 };
                 setUser(userData);
                 setIsOnboardingComplete(data.onboardingComplete || false);
-                
+
                 // Cache user session for offline access
                 cacheUserSession(userData).catch(console.error);
               } else {
@@ -166,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   onboardingComplete: false,
                   walkthroughComplete: false,
                   createdAt: new Date(),
-                  subscriptionTier: 'free',
+                  subscriptionTier: "free",
                 };
 
                 await setDoc(userDocRef, {
@@ -176,21 +191,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 setUser({ id: fbUser.uid, ...newUser });
                 setIsOnboardingComplete(false);
-                
+
                 // Check for pending invitations for this email and send notifications
                 if (newUser.email) {
-                  checkPendingInvitationsForNewUser(fbUser.uid, newUser.email).catch(console.error);
+                  checkPendingInvitationsForNewUser(
+                    fbUser.uid,
+                    newUser.email,
+                  ).catch(console.error);
                 }
               }
               setLoading(false);
             },
             (error) => {
               // Only log if it's not a permission error (which is expected when signing out)
-              if (error.code !== 'permission-denied') {
+              if (error.code !== "permission-denied") {
                 console.error("Error listening to user document:", error);
               }
               setLoading(false);
-            }
+            },
           );
 
           return () => unsubscribeUser();
@@ -222,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUpWithEmail = async (
     email: string,
     password: string,
-    name?: string
+    name?: string,
   ) => {
     try {
       await signUpWithEmailService(email, password, name);
@@ -232,9 +250,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (idToken?: string) => {
     try {
-      await signInWithGoogleService();
+      if (idToken) {
+        await signInWithGoogleCredentialService(idToken);
+      } else {
+        await signInWithGoogleService();
+      }
     } catch (error) {
       const message = getAuthErrorMessage(error as AuthError);
       throw new Error(message);
@@ -280,7 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             onboardingComplete: data.onboardingComplete || false,
             walkthroughComplete: data.walkthroughComplete || false,
             createdAt: data.createdAt?.toDate() || new Date(),
-            subscriptionTier: data.subscriptionTier || 'free',
+            subscriptionTier: data.subscriptionTier || "free",
           });
         } else {
           resolve(null);

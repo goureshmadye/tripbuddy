@@ -1,19 +1,22 @@
 // Gemini AI Service for Trip Planning
-import { ItineraryItem } from '@/types/database';
-import { GoogleGenAI } from '@google/genai';
-import Constants from 'expo-constants';
+import { ItineraryItem } from "@/types/database";
+import { GoogleGenAI } from "@google/genai";
+import Constants from "expo-constants";
 
 // Get API key from Expo constants (works in both dev and production builds)
-const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || 
-                       process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
-                       '';
+const GEMINI_API_KEY =
+  Constants.expoConfig?.extra?.geminiApiKey ||
+  process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
+  "";
 
 // Lazy initialization of Gemini client to prevent crashes
 let aiClient: GoogleGenAI | null = null;
 
 const getAIClient = (): GoogleGenAI => {
   if (!GEMINI_API_KEY) {
-    throw new Error('Gemini API key is not configured. Please set EXPO_PUBLIC_GEMINI_API_KEY in your environment.');
+    throw new Error(
+      "Gemini API key is not configured. Please set EXPO_PUBLIC_GEMINI_API_KEY in your environment.",
+    );
   }
   if (!aiClient) {
     aiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -31,6 +34,7 @@ export interface TripPreferences {
   transportMode?: string | null;
   budgetRange?: string | null;
   travelerCount?: string | null;
+  tripDuration?: string | null;
   accommodationType?: string | null;
   currency: string;
 }
@@ -56,6 +60,15 @@ export interface GeneratedDayPlan {
     breakfast?: GeneratedPlace;
     lunch?: GeneratedPlace;
     dinner?: GeneratedPlace;
+  };
+  accommodation?: {
+    name: string;
+    type: string;
+    description: string;
+    latitude: number;
+    longitude: number;
+    estimatedCost: number;
+    amenities?: string[];
   };
   transport?: {
     mode: string;
@@ -84,25 +97,32 @@ export interface GeneratedTripPlan {
 }
 
 const buildPrompt = (preferences: TripPreferences): string => {
-  const tripDays = Math.ceil(
-    (preferences.endDate.getTime() - preferences.startDate.getTime()) / (1000 * 60 * 60 * 24)
-  ) + 1;
+  const tripDays =
+    Math.ceil(
+      (preferences.endDate.getTime() - preferences.startDate.getTime()) /
+        (1000 * 60 * 60 * 24),
+    ) + 1;
 
-  // Limit to max 5 days to keep response size manageable
-  const planDays = Math.min(tripDays, 5);
+  // Limit to max 3 days to keep response size manageable and improve latency
+  const planDays = Math.min(tripDays, 3);
 
   const budgetDescriptions: Record<string, string> = {
-    budget: 'budget-friendly',
-    moderate: 'moderate spending',
-    luxury: 'luxury',
-    premium: 'ultra-premium',
+    saver: "budget-friendly",
+    comfort: "moderate spending",
+    upscale: "luxury",
+    "high-end": "ultra-premium",
+    // Legacy support
+    budget: "budget-friendly",
+    moderate: "moderate spending",
+    luxury: "luxury",
+    premium: "ultra-premium",
   };
 
   const travelerDescriptions: Record<string, string> = {
-    '1': 'solo traveler',
-    '2': 'couple',
-    '3-5': 'small group',
-    '6+': 'large group',
+    "1": "solo traveler",
+    "2": "couple",
+    "3-5": "small group",
+    "6+": "large group",
   };
 
   // Format dates for the itinerary
@@ -110,27 +130,38 @@ const buildPrompt = (preferences: TripPreferences): string => {
   const dates = Array.from({ length: planDays }, (_, i) => {
     const date = new Date(startDate);
     date.setDate(date.getDate() + i);
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   });
 
   // Reference coordinates if available
   const refLat = preferences.destinationLat || null;
   const refLng = preferences.destinationLng || null;
-  const coordsHint = refLat && refLng 
-    ? `The destination center is at latitude ${refLat}, longitude ${refLng}. All places should be real locations near these coordinates.`
-    : `Use REAL GPS coordinates for each place in ${preferences.destination}. Look up actual latitude/longitude values.`;
+  const coordsHint =
+    refLat && refLng
+      ? `The destination center is at latitude ${refLat}, longitude ${refLng}. All places should be real locations near these coordinates.`
+      : `Use REAL GPS coordinates for each place in ${preferences.destination}. Look up actual latitude/longitude values.`;
 
-  return `Create a ${planDays}-day trip plan for ${preferences.destination}. Budget: ${budgetDescriptions[preferences.budgetRange || 'moderate'] || 'moderate'}. Travelers: ${travelerDescriptions[preferences.travelerCount || '2'] || 'couple'}. Currency: ${preferences.currency}.
+  return `Create a ${planDays}-day trip plan for ${preferences.destination}. Budget: ${budgetDescriptions[preferences.budgetRange || "comfort"] || "moderate"}. Travelers: ${travelerDescriptions[preferences.travelerCount || "2"] || "couple"}. Currency: ${preferences.currency}.
 
 CRITICAL: ${coordsHint}
 DO NOT use placeholder coordinates like 0.0, 0.0. Each place MUST have accurate real-world GPS coordinates.
+
+For EACH day, include:
+1. Places to visit with real locations and costs
+2. Restaurant recommendations for meals
+3. A specific accommodation recommendation (hotel/airbnb/hostel) within budget with REAL location
+4. Daily transport options with estimated costs
+
+All costs should fit within the ${budgetDescriptions[preferences.budgetRange || "comfort"]} budget range.
 
 Return ONLY this JSON (no markdown):
 {
   "summary": "2 sentence trip summary",
   "highlights": ["highlight1", "highlight2", "highlight3"],
   "itinerary": [
-    ${dates.map((date, i) => `{
+    ${dates
+      .map(
+        (date, i) => `{
       "day": ${i + 1},
       "date": "${date}",
       "title": "Day ${i + 1} title",
@@ -142,8 +173,12 @@ Return ONLY this JSON (no markdown):
         "breakfast": {"name": "Real Restaurant", "description": "Desc", "latitude": REAL_LAT, "longitude": REAL_LNG, "category": "food", "estimatedDuration": "1h", "estimatedCost": 0},
         "lunch": {"name": "Real Restaurant", "description": "Desc", "latitude": REAL_LAT, "longitude": REAL_LNG, "category": "food", "estimatedDuration": "1h", "estimatedCost": 0},
         "dinner": {"name": "Real Restaurant", "description": "Desc", "latitude": REAL_LAT, "longitude": REAL_LNG, "category": "food", "estimatedDuration": "1h", "estimatedCost": 0}
-      }
-    }`).join(',\n    ')}
+      },
+      "accommodation": {"name": "Real Hotel/Airbnb Name", "type": "hotel/airbnb/hostel", "description": "Brief desc", "latitude": REAL_LAT, "longitude": REAL_LNG, "estimatedCost": 0, "amenities": ["wifi", "breakfast"]},
+      "transport": {"mode": "walking/taxi/metro", "estimatedCost": 0, "notes": "Brief transport notes"}
+    }`,
+      )
+      .join(",\n    ")}
   ],
   "mapLocations": [
     {"name": "Top spot 1", "description": "Why visit", "latitude": REAL_LAT, "longitude": REAL_LNG, "category": "sightseeing", "estimatedDuration": "2h", "estimatedCost": 0},
@@ -161,19 +196,21 @@ Return ONLY this JSON (no markdown):
   "packingList": ["item1", "item2", "item3"]
 }
 
-Replace REAL_LAT and REAL_LNG with actual GPS coordinates. Costs in ${preferences.currency}.`
+Replace REAL_LAT and REAL_LNG with actual GPS coordinates. Costs in ${preferences.currency}.`;
 };
 
-export const generateTripPlan = async (preferences: TripPreferences): Promise<GeneratedTripPlan> => {
+export const generateTripPlan = async (
+  preferences: TripPreferences,
+): Promise<GeneratedTripPlan> => {
   const prompt = buildPrompt(preferences);
 
   try {
     // Get the AI client (lazy initialization)
     const ai = getAIClient();
-    
+
     // Use the official Gemini SDK
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         temperature: 0.7,
@@ -185,30 +222,36 @@ export const generateTripPlan = async (preferences: TripPreferences): Promise<Ge
 
     // Get the response text
     const generatedText = response.text;
-    
+
     if (!generatedText) {
-      throw new Error('No response from Gemini API');
+      throw new Error("No response from Gemini API");
     }
 
-    console.log('Raw Gemini response length:', generatedText.length);
+    console.log("Raw Gemini response length:", generatedText.length);
 
     // Clean the response - remove markdown code blocks if present
     let cleanedText = generatedText.trim();
-    if (cleanedText.startsWith('```json')) {
+    if (cleanedText.startsWith("```json")) {
       cleanedText = cleanedText.slice(7);
-    } else if (cleanedText.startsWith('```')) {
+    } else if (cleanedText.startsWith("```")) {
       cleanedText = cleanedText.slice(3);
     }
-    if (cleanedText.endsWith('```')) {
+    if (cleanedText.endsWith("```")) {
       cleanedText = cleanedText.slice(0, -3);
     }
     cleanedText = cleanedText.trim();
 
     // Validate JSON structure before parsing
-    if (!cleanedText.startsWith('{') || !cleanedText.endsWith('}')) {
-      console.error('Invalid JSON structure. First 100 chars:', cleanedText.substring(0, 100));
-      console.error('Last 100 chars:', cleanedText.substring(cleanedText.length - 100));
-      throw new Error('Response is not valid JSON - may be truncated');
+    if (!cleanedText.startsWith("{") || !cleanedText.endsWith("}")) {
+      console.error(
+        "Invalid JSON structure. First 100 chars:",
+        cleanedText.substring(0, 100),
+      );
+      console.error(
+        "Last 100 chars:",
+        cleanedText.substring(cleanedText.length - 100),
+      );
+      throw new Error("Response is not valid JSON - may be truncated");
     }
 
     // Parse the JSON response
@@ -216,15 +259,18 @@ export const generateTripPlan = async (preferences: TripPreferences): Promise<Ge
     try {
       tripPlan = JSON.parse(cleanedText);
     } catch (parseError) {
-      console.error('JSON Parse Error. Response length:', cleanedText.length);
-      console.error('First 500 chars:', cleanedText.substring(0, 500));
-      console.error('Last 500 chars:', cleanedText.substring(cleanedText.length - 500));
+      console.error("JSON Parse Error. Response length:", cleanedText.length);
+      console.error("First 500 chars:", cleanedText.substring(0, 500));
+      console.error(
+        "Last 500 chars:",
+        cleanedText.substring(cleanedText.length - 500),
+      );
       throw parseError;
     }
-    
+
     return tripPlan;
   } catch (error) {
-    console.error('Error generating trip plan:', error);
+    console.error("Error generating trip plan:", error);
     throw error;
   }
 };
@@ -233,9 +279,9 @@ export const generateTripPlan = async (preferences: TripPreferences): Promise<Ge
 export const convertToItineraryItems = (
   tripPlan: GeneratedTripPlan,
   tripId: string,
-  userId: string
-): Omit<ItineraryItem, 'id' | 'createdAt'>[] => {
-  const items: Omit<ItineraryItem, 'id' | 'createdAt'>[] = [];
+  userId: string,
+): Omit<ItineraryItem, "id" | "createdAt">[] => {
+  const items: Omit<ItineraryItem, "id" | "createdAt">[] = [];
 
   tripPlan.itinerary.forEach((day) => {
     const dayDate = new Date(day.date);
@@ -253,7 +299,7 @@ export const convertToItineraryItems = (
         location: place.name,
         latitude: place.latitude,
         longitude: place.longitude,
-        category: place.category as ItineraryItem['category'],
+        category: place.category as ItineraryItem["category"],
         startTime,
         endTime: null,
         addedBy: userId,
@@ -271,7 +317,7 @@ export const convertToItineraryItems = (
         location: day.meals.breakfast.name,
         latitude: day.meals.breakfast.latitude,
         longitude: day.meals.breakfast.longitude,
-        category: 'food',
+        category: "food",
         startTime: breakfastTime,
         endTime: null,
         addedBy: userId,
@@ -288,7 +334,7 @@ export const convertToItineraryItems = (
         location: day.meals.lunch.name,
         latitude: day.meals.lunch.latitude,
         longitude: day.meals.lunch.longitude,
-        category: 'food',
+        category: "food",
         startTime: lunchTime,
         endTime: null,
         addedBy: userId,
@@ -305,8 +351,45 @@ export const convertToItineraryItems = (
         location: day.meals.dinner.name,
         latitude: day.meals.dinner.latitude,
         longitude: day.meals.dinner.longitude,
-        category: 'food',
+        category: "food",
         startTime: dinnerTime,
+        endTime: null,
+        addedBy: userId,
+      });
+    }
+
+    // Add accommodation for the day
+    if (day.accommodation) {
+      const checkInTime = new Date(dayDate);
+      checkInTime.setHours(15, 0, 0, 0); // Standard check-in time
+      items.push({
+        tripId,
+        title: day.accommodation.name,
+        description: `${day.accommodation.type}: ${day.accommodation.description}${day.accommodation.amenities ? ` - Amenities: ${day.accommodation.amenities.join(", ")}` : ""}`,
+        location: day.accommodation.name,
+        latitude: day.accommodation.latitude,
+        longitude: day.accommodation.longitude,
+        category: "accommodation",
+        startTime: checkInTime,
+        endTime: null,
+        addedBy: userId,
+      });
+    }
+
+    // Add transport for the day
+    if (day.transport) {
+      const transportTime = new Date(dayDate);
+      transportTime.setHours(10, 0, 0, 0); // Morning transport
+      items.push({
+        tripId,
+        title: `Transport: ${day.transport.mode}`,
+        description:
+          day.transport.notes || `Daily transport via ${day.transport.mode}`,
+        location: null,
+        latitude: null,
+        longitude: null,
+        category: "transport",
+        startTime: transportTime,
         endTime: null,
         addedBy: userId,
       });
@@ -320,8 +403,14 @@ export const convertToItineraryItems = (
 export const convertToExpenses = (
   tripPlan: GeneratedTripPlan,
   tripId: string,
-  userId: string
-): { title: string; amount: number; currency: string; tripId: string; paidBy: string }[] => {
+  userId: string,
+): {
+  title: string;
+  amount: number;
+  currency: string;
+  tripId: string;
+  paidBy: string;
+}[] => {
   return tripPlan.expenseBreakdown.map((expense) => ({
     tripId,
     title: expense.category,

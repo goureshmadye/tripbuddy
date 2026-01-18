@@ -1,14 +1,9 @@
-import { ScreenContainer } from '@/components/screen-container';
+import { ScreenContainer } from "@/components/screen-container";
 import { Button } from "@/components/ui/button";
 import { Divider } from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
 import { SocialButton } from "@/components/ui/social-button";
-import {
-    Colors,
-    FontSizes,
-    FontWeights,
-    Spacing
-} from "@/constants/theme";
+import { Colors, FontSizes, FontWeights, Spacing } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { checkEmailExists } from "@/services/auth";
@@ -18,6 +13,7 @@ import {
     validatePassword,
     validateSignupForm,
 } from "@/utils/validation";
+import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -38,6 +34,30 @@ export default function SignupScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const { signUpWithEmail, signInWithGoogle, isWalkthroughComplete } =
     useAuth();
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+  });
+
+  useEffect(() => {
+    if (response?.type === "success") {
+      const { id_token } = response.params;
+      if (id_token) {
+        setGoogleLoading(true);
+        signInWithGoogle(id_token)
+          .then(navigateAfterSignup)
+          .catch((error: any) => {
+            Alert.alert(
+              "Google Sign-In Failed",
+              error?.message || "Unknown error",
+            );
+          })
+          .finally(() => setGoogleLoading(false));
+      }
+    }
+  }, [response]);
 
   // Form state - NO NAME FIELD (collected in onboarding)
   const [email, setEmail] = useState("");
@@ -119,7 +139,7 @@ export default function SignupScreen() {
         });
       }
     },
-    [password]
+    [password],
   );
 
   // Update password validation when password changes (for confirm password)
@@ -127,7 +147,12 @@ export default function SignupScreen() {
     if (touched.confirmPassword && confirmPassword) {
       validateConfirmPasswordField(confirmPassword);
     }
-  }, [password, confirmPassword, touched.confirmPassword, validateConfirmPasswordField]);
+  }, [
+    password,
+    confirmPassword,
+    touched.confirmPassword,
+    validateConfirmPasswordField,
+  ]);
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
@@ -233,7 +258,7 @@ export default function SignupScreen() {
     } catch (error) {
       Alert.alert(
         "Signup Failed",
-        error instanceof Error ? error.message : "An error occurred"
+        error instanceof Error ? error.message : "An error occurred",
       );
     } finally {
       setLoading(false);
@@ -241,17 +266,25 @@ export default function SignupScreen() {
   };
 
   const handleGoogleSignup = async () => {
-    setGoogleLoading(true);
-    try {
-      await signInWithGoogle();
-      navigateAfterSignup();
-    } catch (error) {
-      Alert.alert(
-        "Google Sign-In Failed",
-        error instanceof Error ? error.message : "An error occurred"
-      );
-    } finally {
-      setGoogleLoading(false);
+    if (Platform.OS !== "web") {
+      try {
+        await promptAsync();
+      } catch (e) {
+        Alert.alert("Error", "Failed to start Google Sign-In");
+      }
+    } else {
+      setGoogleLoading(true);
+      try {
+        await signInWithGoogle();
+        navigateAfterSignup();
+      } catch (error) {
+        Alert.alert(
+          "Google Sign-In Failed",
+          error instanceof Error ? error.message : "An error occurred",
+        );
+      } finally {
+        setGoogleLoading(false);
+      }
     }
   };
 
@@ -273,7 +306,11 @@ export default function SignupScreen() {
   };
 
   return (
-    <ScreenContainer style={styles.container} backgroundColor={colors.background} padded>
+    <ScreenContainer
+      style={styles.container}
+      backgroundColor={colors.background}
+      padded
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
@@ -462,6 +499,7 @@ const styles = StyleSheet.create({
   strengthFill: {
     height: "100%",
     borderRadius: 2,
+    overflow: "hidden",
   },
   strengthText: {
     fontSize: FontSizes.caption,

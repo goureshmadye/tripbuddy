@@ -3,11 +3,18 @@ import { User } from "@/types/database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
     AuthError,
-    createUserWithEmailAndPassword, EmailAuthProvider, fetchSignInMethodsForEmail,
+    createUserWithEmailAndPassword,
+    EmailAuthProvider,
+    fetchSignInMethodsForEmail,
     User as FirebaseUser,
-    GoogleAuthProvider, reauthenticateWithCredential, sendPasswordResetEmail,
+    GoogleAuthProvider,
+    reauthenticateWithCredential,
+    sendPasswordResetEmail,
+    signInWithCredential,
     signInWithEmailAndPassword,
-    signInWithPopup, updatePassword, updateProfile
+    signInWithPopup,
+    updatePassword,
+    updateProfile,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -24,7 +31,7 @@ import { logSecurityEvent, SECURITY_EVENTS } from "./security";
 export const changePassword = async (
   user: FirebaseUser,
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<void> => {
   if (!user.email) throw new Error("User email not found");
   // Re-authenticate user with current password
@@ -97,12 +104,12 @@ export const checkEmailExists = async (email: string): Promise<boolean> => {
 export const signUpWithEmail = async (
   email: string,
   password: string,
-  name?: string
+  name?: string,
 ): Promise<FirebaseUser> => {
   const userCredential = await createUserWithEmailAndPassword(
     auth,
     email,
-    password
+    password,
   );
 
   // Update display name if provided
@@ -111,34 +118,34 @@ export const signUpWithEmail = async (
   }
 
   // Create user document in Firestore (name will be set in onboarding if not provided)
-  await createUserDocument(userCredential.user, { name: name || 'User' });
+  await createUserDocument(userCredential.user, { name: name || "User" });
 
   return userCredential.user;
 };
 
 export const signInWithEmail = async (
   email: string,
-  password: string
+  password: string,
 ): Promise<FirebaseUser> => {
   try {
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
-      password
+      password,
     );
     // Log successful login
     await logSecurityEvent(SECURITY_EVENTS.LOGIN_SUCCESS, {
       userId: userCredential.user.uid,
       email: email,
-      method: 'email'
+      method: "email",
     });
     return userCredential.user;
   } catch (error) {
     // Log failed login attempt
     await logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILURE, {
       email: email,
-      method: 'email',
-      error: (error as AuthError).code
+      method: "email",
+      error: (error as AuthError).code,
     });
     throw error;
   }
@@ -148,7 +155,7 @@ export const resetPassword = async (email: string): Promise<void> => {
   await sendPasswordResetEmail(auth, email);
   // Log password reset request
   await logSecurityEvent(SECURITY_EVENTS.PASSWORD_RESET_REQUEST, {
-    email: email
+    email: email,
   });
 };
 
@@ -156,25 +163,27 @@ export const resetPassword = async (email: string): Promise<void> => {
 // Multi-Factor Authentication (MFA)
 // ============================================
 
-export const enableMFA = async (user: FirebaseUser, phoneNumber: string): Promise<void> => {
+export const enableMFA = async (
+  user: FirebaseUser,
+  phoneNumber: string,
+): Promise<void> => {
   // Note: Firebase MFA requires additional setup and may need server-side verification
   // This is a basic implementation - in production, implement proper MFA flow
   try {
     // Log MFA enable attempt
     await logSecurityEvent(SECURITY_EVENTS.MFA_ENABLED, {
       userId: user.uid,
-      phoneNumber: phoneNumber.substring(0, 5) + '****' // Partial logging for privacy
+      phoneNumber: phoneNumber.substring(0, 5) + "****", // Partial logging for privacy
     });
 
     // Firebase MFA implementation would go here
     // Requires: PhoneAuthProvider, RecaptchaVerifier, etc.
-    console.warn('MFA setup requires additional Firebase configuration');
-
+    console.warn("MFA setup requires additional Firebase configuration");
   } catch (error) {
     await logSecurityEvent(SECURITY_EVENTS.SUSPICIOUS_ACTIVITY, {
       userId: user.uid,
-      action: 'mfa_setup_failed',
-      error: (error as Error).message
+      action: "mfa_setup_failed",
+      error: (error as Error).message,
     });
     throw error;
   }
@@ -184,12 +193,11 @@ export const disableMFA = async (user: FirebaseUser): Promise<void> => {
   try {
     // Log MFA disable
     await logSecurityEvent(SECURITY_EVENTS.MFA_DISABLED, {
-      userId: user.uid
+      userId: user.uid,
     });
 
     // Firebase MFA disable implementation
-    console.warn('MFA disable requires Firebase Admin SDK on server-side');
-
+    console.warn("MFA disable requires Firebase Admin SDK on server-side");
   } catch (error) {
     throw error;
   }
@@ -198,6 +206,18 @@ export const disableMFA = async (user: FirebaseUser): Promise<void> => {
 // ============================================
 // Google Authentication
 // ============================================
+
+export const signInWithGoogleCredential = async (
+  idToken: string,
+): Promise<FirebaseUser> => {
+  const credential = GoogleAuthProvider.credential(idToken);
+  const result = await signInWithCredential(auth, credential);
+
+  // Create or update user document
+  await createUserDocument(result.user);
+
+  return result.user;
+};
 
 export const signInWithGoogle = async (): Promise<FirebaseUser | null> => {
   if (Platform.OS === "web") {
@@ -215,7 +235,7 @@ export const signInWithGoogle = async (): Promise<FirebaseUser | null> => {
     // For native platforms, we'll need expo-auth-session
     // This is handled in the component level with makeRedirectUri
     throw new Error(
-      "Google Sign-In on native requires expo-auth-session setup"
+      "Google Sign-In on native requires expo-auth-session setup",
     );
   }
 };
@@ -226,7 +246,7 @@ export const signInWithGoogle = async (): Promise<FirebaseUser | null> => {
 
 export const createUserDocument = async (
   firebaseUser: FirebaseUser,
-  additionalData?: Partial<User>
+  additionalData?: Partial<User>,
 ): Promise<void> => {
   const userDocRef = doc(firestore, "users", firebaseUser.uid);
   const docSnap = await getDoc(userDocRef);
@@ -248,9 +268,7 @@ export const createUserDocument = async (
   }
 };
 
-export const getUserDocument = async (
-  userId: string
-): Promise<User | null> => {
+export const getUserDocument = async (userId: string): Promise<User | null> => {
   const docRef = doc(firestore, "users", userId);
   const docSnap = await getDoc(docRef);
 
@@ -272,7 +290,7 @@ export const getUserDocument = async (
 
 export const updateUserDocument = async (
   userId: string,
-  data: Partial<User>
+  data: Partial<User>,
 ): Promise<void> => {
   const userDocRef = doc(firestore, "users", userId);
   await updateDoc(userDocRef, data as Record<string, unknown>);
@@ -284,7 +302,7 @@ export const updateUserDocument = async (
 
 export const uploadProfilePhoto = async (
   userId: string,
-  uri: string
+  uri: string,
 ): Promise<string> => {
   // Convert URI to blob
   const response = await fetch(uri);
@@ -308,7 +326,7 @@ export const uploadProfilePhoto = async (
 // ============================================
 
 export const checkOnboardingComplete = async (
-  userId: string
+  userId: string,
 ): Promise<boolean> => {
   try {
     const userDoc = await getUserDocument(userId);
